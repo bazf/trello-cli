@@ -59,6 +59,17 @@ public class LinuxCredentialStoreTests
         Assert.Null(token);
     }
 
+    [Fact]
+    public async Task GetTokenAsync_ReturnsNullWhenSecretToolLookupHasNoValueAndNoStandardError()
+    {
+        var runner = new RecordingProcessRunner(_ => new ProcessRunResult(true, false, 1, "", ""));
+        var store = new LinuxCredentialStore(runner);
+
+        var token = await store.GetTokenAsync();
+
+        Assert.Null(token);
+    }
+
     private static ProcessRunResult Success(string standardOutput = "") =>
         new(true, false, 0, standardOutput, "");
 }

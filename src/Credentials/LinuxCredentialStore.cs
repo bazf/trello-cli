@@ -13,7 +13,7 @@ public sealed class LinuxCredentialStore(IProcessRunner processRunner) : ICreden
                 null),
             cancellationToken);
 
-        if (CredentialStoreProcessHelpers.IsNotFound(result)) return null;
+        if (IsMissingLookupResult(result) || CredentialStoreProcessHelpers.IsNotFound(result)) return null;
         CredentialStoreProcessHelpers.EnsureSucceeded(result);
         return CredentialStoreProcessHelpers.NormalizeToolNewline(result.StandardOutput);
     }
@@ -42,4 +42,8 @@ public sealed class LinuxCredentialStore(IProcessRunner processRunner) : ICreden
         if (CredentialStoreProcessHelpers.IsNotFound(result)) return;
         CredentialStoreProcessHelpers.EnsureSucceeded(result);
     }
+
+    private static bool IsMissingLookupResult(ProcessRunResult result) =>
+        result.IsAvailable && !result.TimedOut && result.ExitCode == 1 &&
+        string.IsNullOrEmpty(result.StandardError);
 }
