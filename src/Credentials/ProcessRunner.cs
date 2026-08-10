@@ -7,14 +7,20 @@ public sealed class ProcessRunner : IProcessRunner
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(60);
     private readonly TimeSpan _timeout;
+    private readonly IProcessLifecycle _processLifecycle;
 
-    public ProcessRunner() : this(DefaultTimeout)
+    public ProcessRunner() : this(DefaultTimeout, SystemProcessLifecycle.Instance)
     {
     }
 
-    public ProcessRunner(TimeSpan timeout)
+    public ProcessRunner(TimeSpan timeout) : this(timeout, SystemProcessLifecycle.Instance)
+    {
+    }
+
+    internal ProcessRunner(TimeSpan timeout, IProcessLifecycle processLifecycle)
     {
         _timeout = timeout;
+        _processLifecycle = processLifecycle;
     }
 
     public async Task<ProcessRunResult> RunAsync(ProcessRunRequest request, CancellationToken cancellationToken = default)
@@ -58,13 +64,19 @@ public sealed class ProcessRunner : IProcessRunner
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
             {
-                await TerminateAsync(process, standardInput);
+                if (!await TerminateAsync(process, standardInput))
+                {
+                    StopPendingIo(process, standardInput, standardOutput, standardError);
+                    return new ProcessRunResult(true, true, -1, string.Empty, string.Empty);
+                }
+
                 await Task.WhenAll(standardOutput, standardError);
                 return new ProcessRunResult(true, true, -1, standardOutput.Result, standardError.Result);
             }
             catch (OperationCanceledException)
             {
                 await TerminateAsync(process, standardInput);
+                StopPendingIo(process, standardInput, standardOutput, standardError);
                 throw;
             }
 
@@ -95,18 +107,35 @@ public sealed class ProcessRunner : IProcessRunner
         standardInput.Close();
     }
 
-    private static async Task TerminateAsync(Process process, Task standardInput)
+    private async Task<bool> TerminateAsync(Process process, Task standardInput)
     {
         try
         {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            if (!process.HasExited) _processLifecycle.Kill(process);
         }
         catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
         {
+            return false;
         }
 
-        await process.WaitForExitAsync(CancellationToken.None);
-        process.StandardInput.Close();
+        using var terminationCancellation = new CancellationTokenSource(_timeout);
+        try
+        {
+            await _processLifecycle
+                .WaitForExitAsync(process, terminationCancellation.Token)
+                .WaitAsync(terminationCancellation.Token);
+            if (!process.HasExited) return false;
+        }
+        catch (OperationCanceledException) when (terminationCancellation.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            return false;
+        }
+
+        CloseStandardInputWithoutFlushing(process);
 
         try
         {
@@ -115,5 +144,54 @@ public sealed class ProcessRunner : IProcessRunner
         catch
         {
         }
+
+        return true;
     }
+
+    private static void StopPendingIo(Process process, params Task[] pendingTasks)
+    {
+        CloseStandardInputWithoutFlushing(process);
+        TryDispose(process.StandardOutput.BaseStream);
+        TryDispose(process.StandardError.BaseStream);
+
+        foreach (var pendingTask in pendingTasks)
+        {
+            _ = pendingTask.ContinueWith(
+                static completed => _ = completed.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+    }
+
+    private static void CloseStandardInputWithoutFlushing(Process process) =>
+        TryDispose(process.StandardInput.BaseStream);
+
+    private static void TryDispose(IDisposable disposable)
+    {
+        try
+        {
+            disposable.Dispose();
+        }
+        catch (Exception exception) when (
+            exception is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+        }
+    }
+}
+
+internal interface IProcessLifecycle
+{
+    void Kill(Process process);
+    Task WaitForExitAsync(Process process, CancellationToken cancellationToken);
+}
+
+internal sealed class SystemProcessLifecycle : IProcessLifecycle
+{
+    public static SystemProcessLifecycle Instance { get; } = new();
+
+    public void Kill(Process process) => process.Kill(entireProcessTree: true);
+
+    public Task WaitForExitAsync(Process process, CancellationToken cancellationToken) =>
+        process.WaitForExitAsync(cancellationToken);
 }
