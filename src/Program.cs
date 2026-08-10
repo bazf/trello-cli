@@ -5,7 +5,7 @@ using TrelloCli.Utils;
 
 const string Version = "1.1.0";
 
-var config = new ConfigService();
+var config = await ConfigService.CreateDefaultAsync();
 
 // Check for help/version first
 if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
@@ -32,7 +32,7 @@ if (args[0] == "--set-auth")
         return;
     }
 
-    var (success, error) = ConfigService.SaveAuth(apiKey, token);
+    var (success, error) = await config.SaveAuthAsync(apiKey, token);
     if (success)
         OutputFormatter.Print(ApiResponse<object>.Success(new { message = "Auth saved to ~/.trello-cli/config.json" }));
     else
@@ -42,7 +42,7 @@ if (args[0] == "--set-auth")
 
 if (args[0] == "--clear-auth")
 {
-    var (success, error) = ConfigService.ClearAuth();
+    var (success, error, _) = await config.ClearAuthAsync();
     if (success)
         OutputFormatter.Print(ApiResponse<object>.Success(new { message = "Auth cleared" }));
     else
