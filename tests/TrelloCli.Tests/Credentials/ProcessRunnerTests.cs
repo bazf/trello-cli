@@ -30,6 +30,21 @@ public class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_WhenTheProcessCompletes_CapturesStandardOutputAndStandardError()
+    {
+        var runner = new ProcessRunner();
+
+        var result = await runner.RunAsync(
+            new ProcessRunRequest(TestHelperExecutable, ["--write-output-and-error"], null));
+
+        Assert.True(result.IsAvailable);
+        Assert.False(result.TimedOut);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("captured-output", result.StandardOutput);
+        Assert.Equal("captured-error", result.StandardError);
+    }
+
+    [Fact]
     public async Task RunAsync_ReportsAnUnavailableExecutableWithoutThrowingItsRawError()
     {
         var runner = new ProcessRunner();
@@ -80,9 +95,11 @@ public class ProcessRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_WhenTerminationFailsAfterTimeout_ReturnsSanitizedTimeoutWithoutHanging()
+    public async Task RunAsync_WhenKillThrowsAggregateExceptionAfterTimeout_ReturnsSanitizedTimeoutWithoutHanging()
     {
-        var lifecycle = new FailingKillProcessLifecycle();
+        var lifecycle = new ControlledProcessLifecycle(
+            new AggregateException(new Win32Exception(ControlledProcessLifecycle.FailureCanary)),
+            killProcessBeforeThrowing: false);
         var runner = new ProcessRunner(TimeSpan.FromMilliseconds(100), lifecycle);
         var run = runner.RunAsync(
             new ProcessRunRequest(TestHelperExecutable, ["--wait-without-reading-stdin"], null));
@@ -97,7 +114,8 @@ public class ProcessRunnerTests
             Assert.Empty(result.StandardOutput);
             Assert.Empty(result.StandardError);
             Assert.Equal(1, lifecycle.KillCalls);
-            Assert.Equal(0, lifecycle.WaitCalls);
+            Assert.Equal(1, lifecycle.WaitCalls);
+            Assert.True(lifecycle.WaitCancellationToken.IsCancellationRequested);
         }
         finally
         {
@@ -106,9 +124,11 @@ public class ProcessRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_WhenTerminationFailsAfterCallerCancellation_PropagatesCancellationWithoutHanging()
+    public async Task RunAsync_WhenKillThrowsAggregateExceptionAfterCallerCancellation_PropagatesCancellationWithoutHanging()
     {
-        var lifecycle = new FailingKillProcessLifecycle();
+        var lifecycle = new ControlledProcessLifecycle(
+            new AggregateException(new InvalidOperationException(ControlledProcessLifecycle.FailureCanary)),
+            killProcessBeforeThrowing: false);
         var runner = new ProcessRunner(TimeSpan.FromSeconds(10), lifecycle);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
         var run = runner.RunAsync(
@@ -122,13 +142,78 @@ public class ProcessRunnerTests
 
             Assert.True(cancellation.IsCancellationRequested);
             Assert.True(run.IsCanceled);
-            Assert.DoesNotContain(FailingKillProcessLifecycle.FailureCanary, exception.ToString());
+            Assert.DoesNotContain(ControlledProcessLifecycle.FailureCanary, exception.ToString());
             Assert.Equal(1, lifecycle.KillCalls);
-            Assert.Equal(0, lifecycle.WaitCalls);
+            Assert.Equal(1, lifecycle.WaitCalls);
+            Assert.True(lifecycle.WaitCancellationToken.IsCancellationRequested);
         }
         finally
         {
             await lifecycle.CleanupAsync();
+        }
+    }
+
+    public static TheoryData<TimeSpan> DefaultAndInfiniteOperationTimeouts => new()
+    {
+        TimeSpan.FromSeconds(60),
+        Timeout.InfiniteTimeSpan
+    };
+
+    [Theory]
+    [MemberData(nameof(DefaultAndInfiniteOperationTimeouts))]
+    public async Task RunAsync_WhenKillSucceedsButLifecycleWaitStalls_CallerCancellationUsesAShortIndependentGrace(
+        TimeSpan operationTimeout)
+    {
+        var lifecycle = new ControlledProcessLifecycle(killException: null, killProcessBeforeThrowing: true);
+        var runner = new ProcessRunner(operationTimeout, lifecycle);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var run = runner.RunAsync(
+            new ProcessRunRequest(TestHelperExecutable, ["--wait-without-reading-stdin"], null),
+            cancellation.Token);
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => run.WaitAsync(TimeSpan.FromSeconds(1)));
+
+            Assert.True(run.IsCanceled);
+            Assert.Equal(1, lifecycle.KillCalls);
+            Assert.Equal(1, lifecycle.WaitCalls);
+            Assert.True(lifecycle.WaitCancellationToken.IsCancellationRequested);
+        }
+        finally
+        {
+            await lifecycle.CleanupAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenAExitedParentLeavesADescendantHoldingOutputPipes_TimesOutWithoutDrainingForever()
+    {
+        var pidFile = Path.Combine(
+            Path.GetTempPath(),
+            $"trello-cli-held-pipe-{Guid.NewGuid():N}.pid");
+        var runner = new ProcessRunner(TimeSpan.FromMilliseconds(100));
+        var run = runner.RunAsync(
+            new ProcessRunRequest(
+                TestHelperExecutable,
+                ["--exit-with-descendant-holding-output", pidFile],
+                null));
+
+        try
+        {
+            var result = await run.WaitAsync(TimeSpan.FromSeconds(1));
+
+            Assert.True(result.IsAvailable);
+            Assert.True(result.TimedOut);
+            Assert.Equal(-1, result.ExitCode);
+            Assert.Empty(result.StandardOutput);
+            Assert.Empty(result.StandardError);
+        }
+        finally
+        {
+            await CleanupProcessFromPidFileAsync(pidFile);
+            await ObserveAsync(run);
         }
     }
 
@@ -173,7 +258,40 @@ public class ProcessRunnerTests
         }
     }
 
-    private sealed class FailingKillProcessLifecycle : IProcessLifecycle
+    private static async Task CleanupProcessFromPidFileAsync(string pidFile)
+    {
+        try
+        {
+            if (!File.Exists(pidFile)) return;
+            var processId = int.Parse(await File.ReadAllTextAsync(pidFile));
+            using var process = Process.GetProcessById(processId);
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+        }
+        finally
+        {
+            File.Delete(pidFile);
+        }
+    }
+
+    private static async Task ObserveAsync(Task task)
+    {
+        try
+        {
+            await task.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        catch
+        {
+        }
+    }
+
+    private sealed class ControlledProcessLifecycle(
+        Exception? killException,
+        bool killProcessBeforeThrowing) : IProcessLifecycle
     {
         public const string FailureCanary = "termination-detail-canary";
         private readonly TaskCompletionSource _waitCompletion = new(
@@ -182,17 +300,20 @@ public class ProcessRunnerTests
 
         public int KillCalls { get; private set; }
         public int WaitCalls { get; private set; }
+        public CancellationToken WaitCancellationToken { get; private set; }
 
         public void Kill(Process process)
         {
             KillCalls++;
             _processId = process.Id;
-            throw new Win32Exception(FailureCanary);
+            if (killProcessBeforeThrowing) process.Kill(entireProcessTree: true);
+            if (killException is not null) throw killException;
         }
 
         public Task WaitForExitAsync(Process process, CancellationToken cancellationToken)
         {
             WaitCalls++;
+            WaitCancellationToken = cancellationToken;
             return _waitCompletion.Task;
         }
 
