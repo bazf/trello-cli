@@ -158,6 +158,32 @@ public class ConfigServiceTests
     }
 
     [Fact]
+    public async Task LoadAsync_WhenMigrationStoreReadThrowsAfterAWrite_PreservesLegacyBytesAndUsesTheLegacyToken()
+    {
+        using var directory = new TemporaryDirectory();
+        var configPath = Path.Combine(directory.Path, "config.json");
+        const string original = "{\n  \"ApiKey\": \"file-key\",\n  \"Token\": \"legacy-token\"\n}";
+        await File.WriteAllTextAsync(configPath, original);
+        var warnings = new List<string>();
+        var store = new RecordingCredentialStore
+        {
+            GetException = new InvalidOperationException("store-read-token-details")
+        };
+        var service = new ConfigService(store, _ => null, configPath, warnings.Add);
+
+        await service.LoadAsync();
+
+        Assert.Equal(1, store.SetCalls);
+        Assert.Equal(1, store.GetCalls);
+        Assert.Equal("legacy-token", store.Token);
+        Assert.Equal("legacy-token", service.Token);
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.Single(warnings);
+        Assert.DoesNotContain("store-read-token-details", warnings[0]);
+        Assert.DoesNotContain("legacy-token", warnings[0]);
+    }
+
+    [Fact]
     public async Task LoadAsync_ResolvesTheApiKeyFromEnvironmentIndependentlyOfTheStoredToken()
     {
         using var directory = new TemporaryDirectory();
@@ -260,6 +286,37 @@ public class ConfigServiceTests
     }
 
     [Fact]
+    public async Task SaveAuthAsync_WhenTheExistingConfigCannotBeRead_ReplacesItWithoutAnUnnecessaryRead()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        using var directory = new TemporaryDirectory();
+        var configPath = Path.Combine(directory.Path, "config.json");
+        await File.WriteAllTextAsync(configPath, "{\"ApiKey\":\"old-key\"}");
+        var store = new RecordingCredentialStore { Token = "old-token" };
+        var service = new ConfigService(store, _ => null, configPath, _ => { });
+
+        (bool success, string? error) result;
+        try
+        {
+            File.SetUnixFileMode(configPath, UnixFileMode.None);
+            result = await service.SaveAuthAsync("new-key", "new-token");
+        }
+        finally
+        {
+            if (File.Exists(configPath))
+            {
+                File.SetUnixFileMode(configPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+
+        Assert.True(result.success);
+        Assert.Null(result.error);
+        Assert.Equal("new-token", store.Token);
+        Assert.Equal("{\"ApiKey\":\"new-key\"}", await File.ReadAllTextAsync(configPath));
+    }
+
+    [Fact]
     public async Task SaveAuthAsync_WhenConfigPersistenceFails_DeletesANewTokenAsRollback()
     {
         using var directory = new TemporaryDirectory();
@@ -344,6 +401,41 @@ public class ConfigServiceTests
         Assert.Null(result.error);
         Assert.False(result.environmentOverridesRemainActive);
         Assert.Equal(1, store.DeleteCalls);
+    }
+
+    [Fact]
+    public async Task ClearAuthAsync_WhenTheConfigDirectoryIsInaccessible_ReportsFailureAndPreservesLegacyConfig()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        using var directory = new TemporaryDirectory();
+        var configPath = Path.Combine(directory.Path, "config.json");
+        const string legacyConfig = "{\"ApiKey\":\"file-key\",\"Token\":\"legacy-token\"}";
+        await File.WriteAllTextAsync(configPath, legacyConfig);
+        var warnings = new List<string>();
+        var service = new ConfigService(
+            new RecordingCredentialStore(),
+            _ => null,
+            configPath,
+            warnings.Add);
+
+        (bool success, string? error, bool environmentOverridesRemainActive) result;
+        try
+        {
+            File.SetUnixFileMode(directory.Path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            result = await service.ClearAuthAsync();
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                directory.Path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        Assert.False(result.success);
+        Assert.Equal("Authentication was only partially cleared.", result.error);
+        Assert.Equal(legacyConfig, await File.ReadAllTextAsync(configPath));
+        Assert.Contains("Unable to remove saved Trello configuration.", warnings);
     }
 
     private sealed class RecordingCredentialStore : ICredentialStore

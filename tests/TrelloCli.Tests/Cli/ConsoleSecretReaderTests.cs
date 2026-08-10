@@ -85,6 +85,53 @@ public class ConsoleSecretReaderTests
         Assert.Equal($"Trello token: {Environment.NewLine}", error.ToString());
     }
 
+    [Fact]
+    public void ReadToken_EnablesControlCAsInputAndRestoresItsPreviousValue()
+    {
+        var treatControlCAsInput = false;
+        var assignments = new List<bool>();
+        using var error = new StringWriter();
+        var reader = new ConsoleSecretReader(
+            () => false,
+            () =>
+            {
+                Assert.True(treatControlCAsInput);
+                return new ConsoleKeyInfo('c', ConsoleKey.C, shift: false, alt: false, control: true);
+            },
+            () => treatControlCAsInput,
+            value =>
+            {
+                assignments.Add(value);
+                treatControlCAsInput = value;
+            });
+
+        var result = reader.ReadToken(error);
+
+        Assert.Equal("TOKEN_INPUT_CANCELLED", result.ErrorCode);
+        Assert.False(treatControlCAsInput);
+        Assert.Equal([true, false], assignments);
+    }
+
+    [Fact]
+    public void ReadToken_WhenKeyReadingThrows_RestoresControlCAsInput()
+    {
+        var treatControlCAsInput = false;
+        using var error = new StringWriter();
+        var reader = new ConsoleSecretReader(
+            () => false,
+            () =>
+            {
+                Assert.True(treatControlCAsInput);
+                throw new IOException("synthetic read failure");
+            },
+            () => treatControlCAsInput,
+            value => treatControlCAsInput = value);
+
+        Assert.Throws<IOException>(() => reader.ReadToken(error));
+
+        Assert.False(treatControlCAsInput);
+    }
+
     private static ConsoleKeyInfo Key(char character, ConsoleKey key) =>
         new(character, key, shift: false, alt: false, control: false);
 }

@@ -114,15 +114,6 @@ public class ConfigService
         if (string.IsNullOrWhiteSpace(apiKey)) return (false, "API Key cannot be empty");
         if (string.IsNullOrWhiteSpace(token)) return (false, "Token cannot be empty");
 
-        try
-        {
-            _ = await SnapshotConfigAsync(_configPath!);
-        }
-        catch
-        {
-            return (false, "Unable to save authentication.");
-        }
-
         string? previousToken;
         try
         {
@@ -209,7 +200,13 @@ public class ConfigService
 
         try
         {
-            if (File.Exists(_configPath)) File.Delete(_configPath);
+            File.Delete(_configPath!);
+        }
+        catch (FileNotFoundException)
+        {
+        }
+        catch (DirectoryNotFoundException)
+        {
         }
         catch
         {
@@ -257,9 +254,6 @@ public class ConfigService
             return null;
         }
     }
-
-    private static async Task<byte[]?> SnapshotConfigAsync(string path) =>
-        File.Exists(path) ? await File.ReadAllBytesAsync(path) : null;
 
     private static async Task WriteConfigAtomicallyAsync(string configPath, ConfigData config)
     {

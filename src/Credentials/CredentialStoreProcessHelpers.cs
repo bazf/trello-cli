@@ -4,6 +4,7 @@ internal static class CredentialStoreProcessHelpers
 {
     public static bool IsNotFound(ProcessRunResult result) =>
         result.IsAvailable && !result.TimedOut && result.ExitCode != 0 &&
+        string.IsNullOrEmpty(result.StandardOutput) &&
         (result.StandardError.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
          result.StandardError.Contains("could not be found", StringComparison.OrdinalIgnoreCase));
 

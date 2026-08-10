@@ -62,6 +62,30 @@ public class LinuxCredentialStoreTests
     }
 
     [Fact]
+    public async Task DeleteTokenAsync_TreatsSecretToolExitOneWithNoOutputAsMissing()
+    {
+        var runner = new RecordingProcessRunner(_ => new ProcessRunResult(true, false, 1, "", ""));
+        var store = new LinuxCredentialStore(runner);
+
+        await store.DeleteTokenAsync();
+    }
+
+    [Theory]
+    [InlineData("unexpected output", "")]
+    [InlineData("unexpected output", "secret not found")]
+    [InlineData("", "unexpected error")]
+    public async Task DeleteTokenAsync_DoesNotTreatSecretToolExitOneWithOutputAsMissing(
+        string standardOutput,
+        string standardError)
+    {
+        var runner = new RecordingProcessRunner(
+            _ => new ProcessRunResult(true, false, 1, standardOutput, standardError));
+        var store = new LinuxCredentialStore(runner);
+
+        await Assert.ThrowsAsync<CredentialStoreException>(() => store.DeleteTokenAsync());
+    }
+
+    [Fact]
     public async Task GetTokenAsync_ReturnsNullForANotFoundCredential()
     {
         var runner = new RecordingProcessRunner(_ => new ProcessRunResult(true, false, 1, "", "secret not found"));
@@ -81,6 +105,19 @@ public class LinuxCredentialStoreTests
         var token = await store.GetTokenAsync();
 
         Assert.Null(token);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("secret not found")]
+    public async Task GetTokenAsync_DoesNotTreatSecretToolExitOneWithStandardOutputAsMissing(
+        string standardError)
+    {
+        var runner = new RecordingProcessRunner(
+            _ => new ProcessRunResult(true, false, 1, "unexpected output", standardError));
+        var store = new LinuxCredentialStore(runner);
+
+        await Assert.ThrowsAsync<CredentialStoreException>(() => store.GetTokenAsync());
     }
 
     private static ProcessRunResult Success(string standardOutput = "") =>

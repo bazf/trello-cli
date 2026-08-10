@@ -42,29 +42,30 @@ public sealed class ProcessRunner : IProcessRunner
 
             var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            if (request.StandardInput is not null)
-            {
-                await process.StandardInput.WriteAsync(request.StandardInput.AsMemory(), cancellationToken);
-            }
-
-            process.StandardInput.Close();
-
             using var timeout = new CancellationTokenSource(_timeout);
-            using var waitCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken,
                 timeout.Token);
+            var standardInput = WriteStandardInputAsync(
+                process.StandardInput,
+                request.StandardInput,
+                operationCancellation.Token);
 
             try
             {
-                await process.WaitForExitAsync(waitCancellation.Token);
+                await standardInput.WaitAsync(operationCancellation.Token);
+                await process.WaitForExitAsync(operationCancellation.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
             {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(CancellationToken.None);
+                await TerminateAsync(process, standardInput);
                 await Task.WhenAll(standardOutput, standardError);
                 return new ProcessRunResult(true, true, -1, standardOutput.Result, standardError.Result);
+            }
+            catch (OperationCanceledException)
+            {
+                await TerminateAsync(process, standardInput);
+                throw;
             }
 
             await Task.WhenAll(standardOutput, standardError);
@@ -77,6 +78,42 @@ public sealed class ProcessRunner : IProcessRunner
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             return new ProcessRunResult(true, false, -1, string.Empty, string.Empty);
+        }
+    }
+
+    private static async Task WriteStandardInputAsync(
+        StreamWriter standardInput,
+        string? value,
+        CancellationToken cancellationToken)
+    {
+        if (value is not null)
+        {
+            await standardInput.WriteAsync(value.AsMemory(), cancellationToken);
+        }
+
+        await standardInput.FlushAsync(cancellationToken);
+        standardInput.Close();
+    }
+
+    private static async Task TerminateAsync(Process process, Task standardInput)
+    {
+        try
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+        }
+
+        await process.WaitForExitAsync(CancellationToken.None);
+        process.StandardInput.Close();
+
+        try
+        {
+            await standardInput;
+        }
+        catch
+        {
         }
     }
 }

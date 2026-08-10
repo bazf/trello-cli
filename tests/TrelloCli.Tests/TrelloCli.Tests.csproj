@@ -16,5 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/TrelloCli.csproj" />
+    <ProjectReference Include="../TrelloCli.ProcessRunnerTestHelper/TrelloCli.ProcessRunnerTestHelper.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

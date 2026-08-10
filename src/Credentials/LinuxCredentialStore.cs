@@ -28,7 +28,7 @@ public sealed class LinuxCredentialStore : ICredentialStore
                 null),
             cancellationToken);
 
-        if (IsMissingLookupResult(result) || CredentialStoreProcessHelpers.IsNotFound(result)) return null;
+        if (IsMissingResult(result) || CredentialStoreProcessHelpers.IsNotFound(result)) return null;
         CredentialStoreProcessHelpers.EnsureSucceeded(result);
         return CredentialStoreProcessHelpers.NormalizeToolNewline(result.StandardOutput);
     }
@@ -54,11 +54,12 @@ public sealed class LinuxCredentialStore : ICredentialStore
                 null),
             cancellationToken);
 
-        if (CredentialStoreProcessHelpers.IsNotFound(result)) return;
+        if (IsMissingResult(result) || CredentialStoreProcessHelpers.IsNotFound(result)) return;
         CredentialStoreProcessHelpers.EnsureSucceeded(result);
     }
 
-    private static bool IsMissingLookupResult(ProcessRunResult result) =>
+    private static bool IsMissingResult(ProcessRunResult result) =>
         result.IsAvailable && !result.TimedOut && result.ExitCode == 1 &&
+        string.IsNullOrEmpty(result.StandardOutput) &&
         string.IsNullOrEmpty(result.StandardError);
 }
