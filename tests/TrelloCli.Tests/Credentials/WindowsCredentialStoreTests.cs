@@ -6,6 +6,19 @@ namespace TrelloCli.Tests.Credentials;
 public class WindowsCredentialStoreTests
 {
     [Fact]
+    public async Task SetTokenAsync_UsesInjectedIdentifiersForAnIsolatedCredential()
+    {
+        var manager = new RecordingWindowsCredentialManager();
+        var store = new WindowsCredentialStore(manager, "trello-cli-smoke-123", "trello-token-smoke-123");
+
+        await store.SetTokenAsync("windows-token-canary");
+
+        Assert.Equal(
+            ("trello-cli-smoke-123", "trello-token-smoke-123", "windows-token-canary", true),
+            Assert.Single(manager.Writes));
+    }
+
+    [Fact]
     public async Task SetTokenAsync_UsesTheExactTargetUsernameAndLocalMachinePersistence()
     {
         const string token = "windows-token-canary";

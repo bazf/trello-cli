@@ -96,6 +96,44 @@ public class TrelloApiServiceTests
     }
 
     [Fact]
+    public async Task CheckAuthCommand_UsesEnvironmentOnlyAuthenticationWithTheRecordingHandler()
+    {
+        var handler = new RecordingHandler(_ => JsonResponse("{\"id\":\"member-id\",\"username\":\"member\",\"fullName\":\"Member Name\"}"));
+        var config = new ConfigService(
+            new ForbiddenCredentialStore(),
+            name => name switch
+            {
+                "TRELLO_API_KEY" => ApiKeyCanary,
+                "TRELLO_TOKEN" => TokenCanary,
+                _ => null
+            },
+            Path.Combine(Path.GetTempPath(), $"trello-environment-auth-{Guid.NewGuid():N}.json"),
+            _ => { });
+        await config.LoadAsync();
+        var api = new TrelloApiService(config, new HttpClient(handler));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var application = new CliApplication(
+            config,
+            new FixedSecretReader(),
+            output,
+            error,
+            new ApiServiceFactory(api));
+
+        await application.RunAsync(["--check-auth"]);
+
+        Assert.Contains("member-id", output.ToString());
+        Assert.DoesNotContain(ApiKeyCanary, output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(TokenCanary, output.ToString(), StringComparison.Ordinal);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("fields=id,username,fullName", request.Query);
+        Assert.DoesNotContain(ApiKeyCanary, request.Uri, StringComparison.Ordinal);
+        Assert.DoesNotContain(TokenCanary, request.Uri, StringComparison.Ordinal);
+        Assert.Collection(request.AuthorizationValues,
+            authorization => Assert.Equal(ExpectedAuthorization, authorization));
+    }
+
+    [Fact]
     public async Task RedirectResponse_IsNotFollowedAndReturnsASanitizedHttpFailure()
     {
         var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.Found)
@@ -207,6 +245,18 @@ public class TrelloApiServiceTests
         public Task<string?> GetTokenAsync(CancellationToken cancellationToken = default) => Task.FromResult<string?>(token);
         public Task SetTokenAsync(string value, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeleteTokenAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class ForbiddenCredentialStore : ICredentialStore
+    {
+        public Task<string?> GetTokenAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Environment-only auth must not read the credential store.");
+
+        public Task SetTokenAsync(string token, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Environment-only auth must not write the credential store.");
+
+        public Task DeleteTokenAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Environment-only auth must not delete from the credential store.");
     }
 
     private sealed class FixedSecretReader : ISecretReader

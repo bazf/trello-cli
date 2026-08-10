@@ -1,15 +1,30 @@
 namespace TrelloCli.Credentials;
 
-public sealed class LinuxCredentialStore(IProcessRunner processRunner) : ICredentialStore
+public sealed class LinuxCredentialStore : ICredentialStore
 {
     private const string SecretToolPath = "/usr/bin/secret-tool";
+    private readonly IProcessRunner _processRunner;
+    private readonly string _service;
+    private readonly string _account;
+
+    public LinuxCredentialStore(IProcessRunner processRunner)
+        : this(processRunner, "trello-cli", "trello-token")
+    {
+    }
+
+    internal LinuxCredentialStore(IProcessRunner processRunner, string service, string account)
+    {
+        _processRunner = processRunner;
+        _service = service;
+        _account = account;
+    }
 
     public async Task<string?> GetTokenAsync(CancellationToken cancellationToken = default)
     {
-        var result = await processRunner.RunAsync(
+        var result = await _processRunner.RunAsync(
             new ProcessRunRequest(
                 SecretToolPath,
-                ["lookup", "service", "trello-cli", "account", "trello-token"],
+                ["lookup", "service", _service, "account", _account],
                 null),
             cancellationToken);
 
@@ -20,10 +35,10 @@ public sealed class LinuxCredentialStore(IProcessRunner processRunner) : ICreden
 
     public async Task SetTokenAsync(string token, CancellationToken cancellationToken = default)
     {
-        var result = await processRunner.RunAsync(
+        var result = await _processRunner.RunAsync(
             new ProcessRunRequest(
                 SecretToolPath,
-                ["store", "--label=Trello CLI token", "service", "trello-cli", "account", "trello-token"],
+                ["store", "--label=Trello CLI token", "service", _service, "account", _account],
                 token),
             cancellationToken);
 
@@ -32,10 +47,10 @@ public sealed class LinuxCredentialStore(IProcessRunner processRunner) : ICreden
 
     public async Task DeleteTokenAsync(CancellationToken cancellationToken = default)
     {
-        var result = await processRunner.RunAsync(
+        var result = await _processRunner.RunAsync(
             new ProcessRunRequest(
                 SecretToolPath,
-                ["clear", "service", "trello-cli", "account", "trello-token"],
+                ["clear", "service", _service, "account", _account],
                 null),
             cancellationToken);
 

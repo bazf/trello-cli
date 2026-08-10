@@ -3,10 +3,19 @@ namespace TrelloCli.Credentials;
 public sealed class WindowsCredentialStore : ICredentialStore
 {
     private readonly IWindowsCredentialManager _credentialManager;
+    private readonly string _target;
+    private readonly string _username;
 
     public WindowsCredentialStore(IWindowsCredentialManager credentialManager)
+        : this(credentialManager, "trello-cli", "trello-token")
+    {
+    }
+
+    internal WindowsCredentialStore(IWindowsCredentialManager credentialManager, string target, string username)
     {
         _credentialManager = credentialManager;
+        _target = target;
+        _username = username;
     }
 
     public WindowsCredentialStore() : this(new WindowsCredentialManager())
@@ -18,7 +27,7 @@ public sealed class WindowsCredentialStore : ICredentialStore
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            return Task.FromResult(_credentialManager.Read("trello-cli", "trello-token"));
+            return Task.FromResult(_credentialManager.Read(_target, _username));
         }
         catch (PlatformNotSupportedException)
         {
@@ -39,7 +48,7 @@ public sealed class WindowsCredentialStore : ICredentialStore
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            _credentialManager.Write("trello-cli", "trello-token", token, localMachinePersistence: true);
+            _credentialManager.Write(_target, _username, token, localMachinePersistence: true);
             return Task.CompletedTask;
         }
         catch (PlatformNotSupportedException)
@@ -61,7 +70,7 @@ public sealed class WindowsCredentialStore : ICredentialStore
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            _credentialManager.Delete("trello-cli", "trello-token");
+            _credentialManager.Delete(_target, _username);
             return Task.CompletedTask;
         }
         catch (PlatformNotSupportedException)

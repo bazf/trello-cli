@@ -13,9 +13,32 @@ All responses are compact JSON:
 ### Authentication
 
 ```bash
+# Save the API key; enter the token at the hidden terminal prompt
+trello-cli --set-auth <api-key>
+
 # Check if authenticated
 trello-cli --check-auth
+
+# Remove persisted API-key configuration and the OS-stored token
+trello-cli --clear-auth
 ```
+
+Never pass the token as a positional argument. For headless use, set both
+`TRELLO_API_KEY` and `TRELLO_TOKEN`; nonblank environment credentials override
+persisted values. Environment variables remain active after `--clear-auth`.
+
+Tokens are stored in Windows Credential Manager (target `trello-cli`, username
+`trello-token`), macOS Keychain (service `trello-cli`, account
+`trello-token`), or Linux Secret Service (`service=trello-cli`,
+`account=trello-token`). Linux requires `secret-tool` from `libsecret-tools`
+and a running, unlocked Secret Service on the D-Bus session.
+
+Version 2.0.0 migrates legacy plaintext configuration only after writing and
+exactly reading back the secure token. On any migration failure the original
+file is preserved, the token remains usable for that run, and only a sanitized
+warning is emitted. `--clear-auth` attempts both persisted locations, reports
+partial cleanup, and neither revokes the Trello token nor unsets environment
+variables.
 
 ### Board Operations
 

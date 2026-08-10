@@ -6,7 +6,7 @@ namespace TrelloCli;
 
 public sealed class CliApplication
 {
-    private const string Version = "1.1.0";
+    private static string Version => typeof(CliApplication).Assembly.GetName().Version!.ToString(3);
 
     private readonly ConfigService _config;
     private readonly ISecretReader _secretReader;
@@ -154,6 +154,17 @@ AUTHENTICATION:
     TRELLO_API_KEY  - Your Trello API key
     TRELLO_TOKEN    - Your Trello token
 
+  Storage:
+    Windows Credential Manager; macOS Keychain; Linux Secret Service.
+    Linux requires secret-tool (libsecret-tools) and a running D-Bus Secret Service.
+
+  Semantics:
+    Environment credentials override persisted credentials.
+    Legacy plaintext tokens are removed only after secure-store verification.
+    Migration failure preserves the legacy file and reports a safe warning.
+    Environment variables remain active after --clear-auth; it does not revoke tokens.
+    For headless use, set both TRELLO_API_KEY and TRELLO_TOKEN.
+
   Get credentials: https://trello.com/app-key
 
 COMMANDS:
@@ -225,7 +236,7 @@ COMMANDS:
     --delete-checklist-item <checklist-id> <item-id>    Delete item from checklist
 
 OUTPUT:
-  All responses are JSON: {{""ok"":true,""data"":...}} or {{""ok"":false,""error"":...}}
+  All responses are JSON: {{""ok"":true,""data"":...}} or {{""ok"":false,""error"":""..."",""code"":""...""}}
 
 EXAMPLES:
   trello-cli --get-boards

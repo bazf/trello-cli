@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-pack:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore locked dependencies and run NuGet audit
+        run: dotnet restore tests/TrelloCli.Tests/TrelloCli.Tests.csproj --locked-mode --nologo
+
+      - name: Report vulnerable transitive packages
+        run: dotnet list tests/TrelloCli.Tests/TrelloCli.Tests.csproj package --vulnerable --include-transitive
+
+      - name: Build Release
+        run: dotnet build src/TrelloCli.csproj --configuration Release --no-restore --nologo
+
+      - name: Test Release
+        run: dotnet test tests/TrelloCli.Tests/TrelloCli.Tests.csproj --configuration Release --no-restore --nologo --verbosity minimal
+
+      - name: Install ephemeral Linux Secret Service prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes dbus-x11 gnome-keyring libsecret-tools
+
+      - name: Smoke-test Linux Secret Service in an ephemeral D-Bus session
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dbus-run-session -- bash -euxo pipefail -c '
+            smoke_runtime="${RUNNER_TEMP}/trello-cli-keyring-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            mkdir -p "$smoke_runtime"
+            chmod 700 "$smoke_runtime"
+            export XDG_RUNTIME_DIR="$smoke_runtime"
+            cleanup() {
+              gnome-keyring-daemon --stop >/dev/null 2>&1 || true
+              rm -rf "$smoke_runtime"
+            }
+            trap cleanup EXIT
+            eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"
+            export TRELLO_CREDENTIAL_STORE_SMOKE_TESTS=1
+            dotnet test tests/TrelloCli.Tests/TrelloCli.Tests.csproj --configuration Release --no-build --no-restore --nologo --verbosity minimal --filter FullyQualifiedName~PlatformCredentialStoreSmokeTests
+          '
+
+      - name: Smoke-test native credential store
+        if: runner.os != 'Linux'
+        env:
+          TRELLO_CREDENTIAL_STORE_SMOKE_TESTS: "1"
+        run: dotnet test tests/TrelloCli.Tests/TrelloCli.Tests.csproj --configuration Release --no-build --no-restore --nologo --verbosity minimal --filter FullyQualifiedName~PlatformCredentialStoreSmokeTests
+
+      - name: Pack Release
+        run: dotnet pack src/TrelloCli.csproj --configuration Release --no-build --no-restore --nologo --output artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TrelloCli-${{ matrix.os }}
+          path: artifacts/*.nupkg
+          if-no-files-found: error

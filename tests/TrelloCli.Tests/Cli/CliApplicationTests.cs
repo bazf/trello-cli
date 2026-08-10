@@ -249,6 +249,49 @@ public class CliApplicationTests
         Assert.Contains("trello-cli --set-auth <api-key>", output.ToString());
         Assert.DoesNotContain("<api-key> <token>", output.ToString());
         Assert.DoesNotContain("config.json", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("{\"ok\":false,\"error\":\"...\",\"code\":\"...\"}", output.ToString());
+    }
+
+    [Fact]
+    public async Task Help_ExplainsPlatformCredentialStorageAndLinuxPrerequisites()
+    {
+        var config = await CreateConfiguredServiceAsync();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var application = new CliApplication(
+            config,
+            new FixedSecretReader(SecretReadResult.Success("unused-token")),
+            output,
+            error,
+            new RecordingServiceFactory());
+
+        await application.RunAsync(["--help"]);
+
+        Assert.Contains("Windows Credential Manager", output.ToString());
+        Assert.Contains("macOS Keychain", output.ToString());
+        Assert.Contains("Linux Secret Service", output.ToString());
+        Assert.Contains("libsecret-tools", output.ToString());
+        Assert.Contains("D-Bus", output.ToString());
+    }
+
+    [Fact]
+    public async Task Help_ExplainsMigrationCleanupAndHeadlessSemantics()
+    {
+        var config = await CreateConfiguredServiceAsync();
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var application = new CliApplication(
+            config,
+            new FixedSecretReader(SecretReadResult.Success("unused-token")),
+            output,
+            error,
+            new RecordingServiceFactory());
+
+        await application.RunAsync(["--help"]);
+
+        Assert.Contains("Legacy plaintext tokens are removed only after secure-store verification", output.ToString());
+        Assert.Contains("Environment variables remain active after --clear-auth", output.ToString());
+        Assert.Contains("For headless use, set both TRELLO_API_KEY and TRELLO_TOKEN", output.ToString());
     }
 
     [Fact]
@@ -270,7 +313,7 @@ public class CliApplicationTests
     }
 
     [Fact]
-    public async Task RunAsync_ShowsTheExistingVersionForTheVersionFlag()
+    public async Task RunAsync_ShowsTheAssemblyPackageVersionForTheVersionFlag()
     {
         var config = await CreateConfiguredServiceAsync();
         using var output = new StringWriter();
@@ -284,7 +327,7 @@ public class CliApplicationTests
 
         await application.RunAsync(["--version"]);
 
-        Assert.Equal($"trello-cli v1.1.0{Environment.NewLine}", output.ToString());
+        Assert.Equal($"trello-cli v2.0.0{Environment.NewLine}", output.ToString());
     }
 
     [Fact]

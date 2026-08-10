@@ -6,6 +6,19 @@ namespace TrelloCli.Tests.Credentials;
 public class LinuxCredentialStoreTests
 {
     [Fact]
+    public async Task SetTokenAsync_UsesInjectedIdentifiersForAnIsolatedCredential()
+    {
+        var runner = new RecordingProcessRunner(_ => Success());
+        var store = new LinuxCredentialStore(runner, "trello-cli-smoke-123", "trello-token-smoke-123");
+
+        await store.SetTokenAsync("linux-token-canary");
+
+        Assert.Equal(
+            ["store", "--label=Trello CLI token", "service", "trello-cli-smoke-123", "account", "trello-token-smoke-123"],
+            Assert.Single(runner.Requests).Arguments);
+    }
+
+    [Fact]
     public async Task SetTokenAsync_UsesTheExactSecretToolCommandAndWritesTheExactTokenWithoutANewline()
     {
         const string token = "linux-token-canary";

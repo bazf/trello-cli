@@ -39,12 +39,32 @@ All commands return JSON:
 trello-cli --check-auth
 # Returns: {"ok":true,"data":{"id":"...","username":"...","fullName":"..."}}
 
-# Set credentials (one-time)
-trello-cli --set-auth <api-key> <token>
+# Set credentials (one-time); enter the token at the hidden terminal prompt
+trello-cli --set-auth <api-key>
 
 # Clear saved credentials
 trello-cli --clear-auth
 ```
+
+Never pass the token as another argument. For CI and other headless sessions,
+set both `TRELLO_API_KEY` and `TRELLO_TOKEN`; environment credentials take
+precedence over persisted credentials. `--clear-auth` removes the persisted API
+key and OS-stored token, but it does not revoke the Trello token or unset the
+environment. Its success data reports `environmentOverridesRemainActive`, and
+partial deletion is reported as an error.
+
+Token storage is platform-native:
+
+- Windows Credential Manager: target `trello-cli`, username `trello-token`.
+- macOS Keychain: service `trello-cli`, account `trello-token`.
+- Linux Secret Service: `service=trello-cli`, `account=trello-token`. Install
+  `secret-tool` from `libsecret-tools` and ensure an unlocked Secret Service is
+  available on the D-Bus session; installing the CLI alone does not start one.
+
+On upgrade to 2.0.0, a legacy plaintext token is written to the secure store,
+read back, and exactly verified before the configuration file is atomically
+rewritten without the token. Any failure preserves the original file and token
+for the current run and emits only a sanitized warning so migration can retry.
 
 ### Board Operations
 
@@ -328,8 +348,16 @@ trello-cli --delete-checklist-item <checklist-id> <item-id>
 ```bash
 # Get API key from: https://trello.com/app-key
 # Get Token from the same page (click "Token" link)
-trello-cli --set-auth <your-api-key> <your-token>
+trello-cli --set-auth <your-api-key>  # Enter the token at the hidden prompt
 trello-cli --check-auth  # Verify it works
+```
+
+Headless alternative:
+
+```bash
+export TRELLO_API_KEY='<your-api-key>'
+export TRELLO_TOKEN='<your-token>'
+trello-cli --check-auth
 ```
 
 ### 2. Explore Board Structure
