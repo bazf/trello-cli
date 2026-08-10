@@ -225,11 +225,6 @@ public class ConfigService
             Nonblank(_environmentReader("TRELLO_TOKEN")) is not null);
     }
 
-    public string GetAuthQuery()
-    {
-        return $"key={ApiKey}&token={Token}";
-    }
-
     public (bool valid, string? error) Validate()
     {
         if (string.IsNullOrEmpty(ApiKey))

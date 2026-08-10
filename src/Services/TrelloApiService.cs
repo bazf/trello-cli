@@ -7,21 +7,52 @@ public class TrelloApiService : IAuthenticationChecker
 {
     private readonly HttpClient _http;
     private readonly ConfigService _config;
-    private const string BaseUrl = "https://api.trello.com/1";
+    private const string ProductionBaseUrl = "https://api.trello.com/1";
+    private readonly string _baseUrl;
+    private const string HttpRequestFailedMessage = "HTTP request failed.";
+    private const string UnexpectedErrorMessage = "Unexpected error occurred.";
 
     public TrelloApiService(ConfigService config)
+        : this(config, CreateProductionHttpClient(), ProductionBaseUrl)
+    {
+    }
+
+    public TrelloApiService(ConfigService config, HttpClient http)
+        : this(config, http, ProductionBaseUrl)
+    {
+    }
+
+    internal TrelloApiService(ConfigService config, HttpClient http, string baseUrl)
     {
         _config = config;
-        _http = new HttpClient();
+        _http = http;
+        _baseUrl = baseUrl.TrimEnd('/');
     }
 
     private string BuildUrl(string endpoint, string? extraParams = null)
     {
-        var sep = endpoint.Contains('?') ? "&" : "?";
-        var url = $"{BaseUrl}{endpoint}{sep}{_config.GetAuthQuery()}";
-        if (!string.IsNullOrEmpty(extraParams))
-            url += $"&{extraParams}";
-        return url;
+        if (string.IsNullOrEmpty(extraParams)) return $"{_baseUrl}{endpoint}";
+        var separator = endpoint.Contains('?') ? "&" : "?";
+        return $"{_baseUrl}{endpoint}{separator}{extraParams}";
+    }
+
+    internal static HttpClient CreateProductionHttpClient() => new(
+        new HttpClientHandler { AllowAutoRedirect = false });
+
+    private async Task<string> GetStringAsync(string url)
+    {
+        using var response = await SendAsync(HttpMethod.Get, url);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, HttpContent? content = null)
+    {
+        using var request = new HttpRequestMessage(method, url) { Content = content };
+        request.Headers.TryAddWithoutValidation(
+            "Authorization",
+            $"OAuth oauth_consumer_key=\"{_config.ApiKey}\", oauth_token=\"{_config.Token}\"");
+        return await _http.SendAsync(request);
     }
 
     // Board operations
@@ -30,17 +61,17 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl("/members/me/boards", "filter=open");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var boards = JsonSerializer.Deserialize<List<Board>>(response) ?? new();
             return ApiResponse<List<Board>>.Success(boards);
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<Board>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<Board>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<Board>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<Board>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -49,7 +80,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/boards/{boardId}");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var board = JsonSerializer.Deserialize<Board>(response);
             return board != null
                 ? ApiResponse<Board>.Success(board)
@@ -59,13 +90,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Board>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Board>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Board>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Board>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Board>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -75,7 +106,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/boards/{boardId}/lists", "filter=open");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var lists = JsonSerializer.Deserialize<List<TrelloList>>(response) ?? new();
             return ApiResponse<List<TrelloList>>.Success(lists);
         }
@@ -83,13 +114,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<TrelloList>>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<TrelloList>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<TrelloList>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<TrelloList>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<TrelloList>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -100,7 +131,7 @@ public class TrelloApiService : IAuthenticationChecker
             var url = BuildUrl($"/lists/{listId}");
             var formData = new Dictionary<string, string> { ["pos"] = pos };
             var content = new FormUrlEncodedContent(formData);
-            var response = await _http.PutAsync(url, content);
+            var response = await SendAsync(HttpMethod.Put, url, content);
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
             var list = JsonSerializer.Deserialize<TrelloList>(responseContent);
@@ -112,13 +143,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<TrelloList>.Fail("List not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<TrelloList>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<TrelloList>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<TrelloList>.Fail(ex.Message, "ERROR");
+            return ApiResponse<TrelloList>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -127,7 +158,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl("/lists", $"name={Uri.EscapeDataString(name)}&idBoard={boardId}");
-            var response = await _http.PostAsync(url, null);
+            var response = await SendAsync(HttpMethod.Post, url);
             response.EnsureSuccessStatusCode();
             var content = await response.Content.ReadAsStringAsync();
             var list = JsonSerializer.Deserialize<TrelloList>(content);
@@ -135,13 +166,13 @@ public class TrelloApiService : IAuthenticationChecker
                 ? ApiResponse<TrelloList>.Success(list)
                 : ApiResponse<TrelloList>.Fail("Failed to create list", "CREATE_FAILED");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<TrelloList>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<TrelloList>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<TrelloList>.Fail(ex.Message, "ERROR");
+            return ApiResponse<TrelloList>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -151,7 +182,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/lists/{listId}/cards");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var cards = JsonSerializer.Deserialize<List<Card>>(response) ?? new();
             return ApiResponse<List<Card>>.Success(cards);
         }
@@ -159,13 +190,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Card>>.Fail("List not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<Card>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<Card>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<Card>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<Card>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -174,7 +205,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/boards/{boardId}/cards", "filter=open");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var cards = JsonSerializer.Deserialize<List<Card>>(response) ?? new();
             return ApiResponse<List<Card>>.Success(cards);
         }
@@ -182,13 +213,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Card>>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<Card>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<Card>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<Card>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<Card>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -197,7 +228,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var card = JsonSerializer.Deserialize<Card>(response);
             return card != null
                 ? ApiResponse<Card>.Success(card)
@@ -207,13 +238,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Card>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Card>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Card>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Card>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Card>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -238,7 +269,7 @@ public class TrelloApiService : IAuthenticationChecker
                 formData["idMembers"] = members;
 
             var content = new FormUrlEncodedContent(formData);
-            var response = await _http.PostAsync(url, content);
+            var response = await SendAsync(HttpMethod.Post, url, content);
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
             var card = JsonSerializer.Deserialize<Card>(responseContent);
@@ -246,13 +277,13 @@ public class TrelloApiService : IAuthenticationChecker
                 ? ApiResponse<Card>.Success(card)
                 : ApiResponse<Card>.Fail("Failed to create card", "CREATE_FAILED");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Card>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Card>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Card>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Card>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -282,7 +313,7 @@ public class TrelloApiService : IAuthenticationChecker
 
             var url = BuildUrl($"/cards/{cardId}");
             var content = new FormUrlEncodedContent(formData);
-            var response = await _http.PutAsync(url, content);
+            var response = await SendAsync(HttpMethod.Put, url, content);
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
             var card = JsonSerializer.Deserialize<Card>(responseContent);
@@ -294,13 +325,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Card>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Card>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Card>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Card>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Card>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -314,7 +345,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}");
-            var response = await _http.DeleteAsync(url);
+            var response = await SendAsync(HttpMethod.Delete, url);
             response.EnsureSuccessStatusCode();
             return ApiResponse<bool>.Success(true);
         }
@@ -322,13 +353,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "ERROR");
+            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -338,7 +369,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}/actions", "filter=commentCard");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var comments = JsonSerializer.Deserialize<List<Comment>>(response) ?? new();
             return ApiResponse<List<Comment>>.Success(comments);
         }
@@ -346,13 +377,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Comment>>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<Comment>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<Comment>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<Comment>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<Comment>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -361,7 +392,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}/actions/comments", $"text={Uri.EscapeDataString(text)}");
-            var response = await _http.PostAsync(url, null);
+            var response = await SendAsync(HttpMethod.Post, url);
             response.EnsureSuccessStatusCode();
             var content = await response.Content.ReadAsStringAsync();
             var comment = JsonSerializer.Deserialize<Comment>(content);
@@ -373,13 +404,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Comment>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Comment>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Comment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Comment>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Comment>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -389,7 +420,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/boards/{boardId}/labels", "limit=1000");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var labels = JsonSerializer.Deserialize<List<Label>>(response) ?? new();
             return ApiResponse<List<Label>>.Success(labels);
         }
@@ -397,13 +428,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Label>>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<Label>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<Label>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<Label>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<Label>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -419,7 +450,7 @@ public class TrelloApiService : IAuthenticationChecker
                 ["color"] = string.IsNullOrEmpty(color) ? "" : color
             };
             var content = new FormUrlEncodedContent(formData);
-            var response = await _http.PostAsync(url, content);
+            var response = await SendAsync(HttpMethod.Post, url, content);
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
             var label = JsonSerializer.Deserialize<Label>(responseContent);
@@ -427,13 +458,13 @@ public class TrelloApiService : IAuthenticationChecker
                 ? ApiResponse<Label>.Success(label)
                 : ApiResponse<Label>.Fail("Failed to create label", "CREATE_FAILED");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Label>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Label>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Label>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Label>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -452,7 +483,7 @@ public class TrelloApiService : IAuthenticationChecker
 
             var url = BuildUrl($"/labels/{labelId}");
             var content = new FormUrlEncodedContent(formData);
-            var response = await _http.PutAsync(url, content);
+            var response = await SendAsync(HttpMethod.Put, url, content);
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
             var label = JsonSerializer.Deserialize<Label>(responseContent);
@@ -464,13 +495,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Label>.Fail("Label not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Label>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Label>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Label>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Label>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -479,7 +510,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/labels/{labelId}");
-            var response = await _http.DeleteAsync(url);
+            var response = await SendAsync(HttpMethod.Delete, url);
             response.EnsureSuccessStatusCode();
             return ApiResponse<bool>.Success(true);
         }
@@ -487,13 +518,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Label not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "ERROR");
+            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -503,7 +534,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl("/members/me", "fields=id,username,fullName");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var data = JsonSerializer.Deserialize<JsonElement>(response);
             return ApiResponse<object>.Success(new
             {
@@ -516,13 +547,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<object>.Fail("Invalid API key or token", "UNAUTHORIZED");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<object>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<object>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<object>.Fail(ex.Message, "ERROR");
+            return ApiResponse<object>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -532,7 +563,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}/attachments");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var attachments = JsonSerializer.Deserialize<List<Attachment>>(response) ?? new();
             return ApiResponse<List<Attachment>>.Success(attachments);
         }
@@ -540,13 +571,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Attachment>>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<Attachment>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<Attachment>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<Attachment>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<Attachment>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -555,7 +586,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}/attachments/{attachmentId}");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var attachment = JsonSerializer.Deserialize<Attachment>(response);
             return attachment != null
                 ? ApiResponse<Attachment>.Success(attachment)
@@ -565,13 +596,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Attachment>.Fail("Attachment not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Attachment>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Attachment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Attachment>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Attachment>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -597,7 +628,7 @@ public class TrelloApiService : IAuthenticationChecker
             if (!string.IsNullOrEmpty(name))
                 content.Add(new StringContent(name), "name");
 
-            var response = await _http.PostAsync(url, content);
+            var response = await SendAsync(HttpMethod.Post, url, content);
             response.EnsureSuccessStatusCode();
 
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -611,13 +642,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Attachment>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Attachment>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Attachment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Attachment>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Attachment>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -635,7 +666,7 @@ public class TrelloApiService : IAuthenticationChecker
                 formData["name"] = name;
 
             var content = new FormUrlEncodedContent(formData);
-            var response = await _http.PostAsync(url, content);
+            var response = await SendAsync(HttpMethod.Post, url, content);
             response.EnsureSuccessStatusCode();
 
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -649,13 +680,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Attachment>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Attachment>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Attachment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Attachment>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Attachment>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -664,7 +695,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}/attachments/{attachmentId}");
-            var response = await _http.DeleteAsync(url);
+            var response = await SendAsync(HttpMethod.Delete, url);
             response.EnsureSuccessStatusCode();
             return ApiResponse<bool>.Success(true);
         }
@@ -672,13 +703,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Attachment not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "ERROR");
+            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -688,7 +719,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/cards/{cardId}/checklists");
-            var response = await _http.GetStringAsync(url);
+            var response = await GetStringAsync(url);
             var checklists = JsonSerializer.Deserialize<List<Checklist>>(response) ?? new();
             return ApiResponse<List<Checklist>>.Success(checklists);
         }
@@ -696,13 +727,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Checklist>>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<List<Checklist>>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<List<Checklist>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<List<Checklist>>.Fail(ex.Message, "ERROR");
+            return ApiResponse<List<Checklist>>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -711,7 +742,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl("/checklists", $"idCard={cardId}&name={Uri.EscapeDataString(name)}");
-            var response = await _http.PostAsync(url, null);
+            var response = await SendAsync(HttpMethod.Post, url);
             response.EnsureSuccessStatusCode();
             var content = await response.Content.ReadAsStringAsync();
             var checklist = JsonSerializer.Deserialize<Checklist>(content);
@@ -723,13 +754,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Checklist>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<Checklist>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<Checklist>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<Checklist>.Fail(ex.Message, "ERROR");
+            return ApiResponse<Checklist>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -738,7 +769,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/checklists/{checklistId}");
-            var response = await _http.DeleteAsync(url);
+            var response = await SendAsync(HttpMethod.Delete, url);
             response.EnsureSuccessStatusCode();
             return ApiResponse<bool>.Success(true);
         }
@@ -746,13 +777,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Checklist not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "ERROR");
+            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -761,7 +792,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/checklists/{checklistId}/checkItems", $"name={Uri.EscapeDataString(name)}");
-            var response = await _http.PostAsync(url, null);
+            var response = await SendAsync(HttpMethod.Post, url);
             response.EnsureSuccessStatusCode();
             var content = await response.Content.ReadAsStringAsync();
             var item = JsonSerializer.Deserialize<ChecklistItem>(content);
@@ -773,13 +804,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<ChecklistItem>.Fail("Checklist not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<ChecklistItem>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<ChecklistItem>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<ChecklistItem>.Fail(ex.Message, "ERROR");
+            return ApiResponse<ChecklistItem>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -793,7 +824,7 @@ public class TrelloApiService : IAuthenticationChecker
                 ["state"] = state
             };
             var content = new FormUrlEncodedContent(formData);
-            var response = await _http.PutAsync(url, content);
+            var response = await SendAsync(HttpMethod.Put, url, content);
             response.EnsureSuccessStatusCode();
             var responseContent = await response.Content.ReadAsStringAsync();
             var item = JsonSerializer.Deserialize<ChecklistItem>(responseContent);
@@ -805,13 +836,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<ChecklistItem>.Fail("Card or checklist item not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<ChecklistItem>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<ChecklistItem>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<ChecklistItem>.Fail(ex.Message, "ERROR");
+            return ApiResponse<ChecklistItem>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
@@ -820,7 +851,7 @@ public class TrelloApiService : IAuthenticationChecker
         try
         {
             var url = BuildUrl($"/checklists/{checklistId}/checkItems/{checkItemId}");
-            var response = await _http.DeleteAsync(url);
+            var response = await SendAsync(HttpMethod.Delete, url);
             response.EnsureSuccessStatusCode();
             return ApiResponse<bool>.Success(true);
         }
@@ -828,13 +859,13 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Checklist or item not found", "NOT_FOUND");
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return ApiResponse<bool>.Fail(ex.Message, "ERROR");
+            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
