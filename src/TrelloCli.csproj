@@ -18,4 +18,8 @@
     <Description>CLI tool for Trello with AI-friendly JSON output</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Meziantou.Framework.Win32.CredentialManager" Version="3.0.1" />
+  </ItemGroup>
+
 </Project>
