@@ -1,7 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using TrelloCli.Credentials;
 
 namespace TrelloCli.Services;
+
+public sealed record ClearAuthSuccessData(string Message, bool EnvironmentOverridesRemainActive);
 
 public class ConfigService
 {
@@ -32,13 +35,27 @@ public class ConfigService
         _warningWriter = warningWriter;
     }
 
-    public static async Task<ConfigService> CreateDefaultAsync()
+    public static async Task<ConfigService> CreateDefaultAsync(
+        Func<ICredentialStore>? credentialStoreFactory = null,
+        Func<string, string?>? environmentReader = null,
+        string? configPath = null,
+        Action<string>? warningWriter = null)
     {
+        ICredentialStore credentialStore;
+        try
+        {
+            credentialStore = (credentialStoreFactory ?? (() => new CredentialStoreFactory().Create()))();
+        }
+        catch
+        {
+            credentialStore = UnavailableCredentialStore.Instance;
+        }
+
         var service = new ConfigService(
-            new CredentialStoreFactory().Create(),
-            Environment.GetEnvironmentVariable,
-            DefaultConfigFile,
-            Console.Error.WriteLine);
+            credentialStore,
+            environmentReader ?? Environment.GetEnvironmentVariable,
+            configPath ?? DefaultConfigFile,
+            warningWriter ?? Console.Error.WriteLine);
         await service.LoadAsync();
         return service;
     }
@@ -190,6 +207,8 @@ public class ConfigService
     private class ConfigData
     {
         public string? ApiKey { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Token { get; set; }
     }
 
@@ -247,4 +266,22 @@ public class ConfigService
     private void Warn(string message) => _warningWriter?.Invoke(message);
 
     private static string? Nonblank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private sealed class UnavailableCredentialStore : ICredentialStore
+    {
+        public static UnavailableCredentialStore Instance { get; } = new();
+
+        public Task<string?> GetTokenAsync(CancellationToken cancellationToken = default) =>
+            Task.FromException<string?>(Unavailable());
+
+        public Task SetTokenAsync(string token, CancellationToken cancellationToken = default) =>
+            Task.FromException(Unavailable());
+
+        public Task DeleteTokenAsync(CancellationToken cancellationToken = default) =>
+            Task.FromException(Unavailable());
+
+        private static CredentialStoreException Unavailable() => new(
+            CredentialStoreErrorCategory.StoreUnavailable,
+            "The credential store is unavailable.");
+    }
 }

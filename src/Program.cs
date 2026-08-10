@@ -42,9 +42,10 @@ if (args[0] == "--set-auth")
 
 if (args[0] == "--clear-auth")
 {
-    var (success, error, _) = await config.ClearAuthAsync();
+    var (success, error, environmentOverridesRemainActive) = await config.ClearAuthAsync();
     if (success)
-        OutputFormatter.Print(ApiResponse<object>.Success(new { message = "Auth cleared" }));
+        OutputFormatter.Print(ApiResponse<object>.Success(
+            new ClearAuthSuccessData("Auth cleared", environmentOverridesRemainActive)));
     else
         OutputFormatter.Print(ApiResponse<object>.Fail(error!, "CLEAR_ERROR"));
     return;

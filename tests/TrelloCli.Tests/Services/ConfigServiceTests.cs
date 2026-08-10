@@ -1,5 +1,7 @@
 using TrelloCli.Credentials;
+using TrelloCli.Models;
 using TrelloCli.Services;
+using TrelloCli.Utils;
 using Xunit;
 
 namespace TrelloCli.Tests.Services;
@@ -55,8 +57,7 @@ public class ConfigServiceTests
         Assert.Equal("legacy-token", store.Token);
         Assert.Equal(1, store.SetCalls);
         Assert.Equal(1, store.GetCalls);
-        Assert.DoesNotContain("legacy-token", await File.ReadAllTextAsync(configPath));
-        Assert.Contains("file-key", await File.ReadAllTextAsync(configPath));
+        Assert.Equal("{\"ApiKey\":\"file-key\"}", await File.ReadAllTextAsync(configPath));
     }
 
     [Fact]
@@ -73,9 +74,7 @@ public class ConfigServiceTests
         Assert.Equal("new-token", store.Token);
         Assert.Equal(1, store.SetCalls);
         Assert.Equal(2, store.GetCalls);
-        var persisted = await File.ReadAllTextAsync(configPath);
-        Assert.Contains("new-key", persisted);
-        Assert.DoesNotContain("new-token", persisted);
+        Assert.Equal("{\"ApiKey\":\"new-key\"}", await File.ReadAllTextAsync(configPath));
         if (!OperatingSystem.IsWindows())
         {
             Assert.Equal(
@@ -106,6 +105,17 @@ public class ConfigServiceTests
         Assert.True(result.environmentOverridesRemainActive);
         Assert.Null(store.Token);
         Assert.False(File.Exists(configPath));
+    }
+
+    [Fact]
+    public void ClearAuthSuccessData_SerializesWhetherEnvironmentCredentialsRemainActive()
+    {
+        var json = OutputFormatter.ToJson(
+            ApiResponse<object>.Success(new ClearAuthSuccessData("Auth cleared", EnvironmentOverridesRemainActive: true)));
+
+        Assert.Equal(
+            "{\"ok\":true,\"data\":{\"message\":\"Auth cleared\",\"environmentOverridesRemainActive\":true}}",
+            json);
     }
 
     [Fact]
@@ -185,6 +195,25 @@ public class ConfigServiceTests
         Assert.Equal("Token not set. Use: trello-cli --set-auth <api-key> <token>", validation.error);
         Assert.Single(warnings);
         Assert.DoesNotContain("store-token-details", warnings[0]);
+    }
+
+    [Fact]
+    public async Task CreateDefaultAsync_WhenCredentialStoreConstructionFails_ReturnsMissingAuthInsteadOfThrowing()
+    {
+        using var directory = new TemporaryDirectory();
+        var warnings = new List<string>();
+
+        var service = await ConfigService.CreateDefaultAsync(
+            () => throw new CredentialStoreException(CredentialStoreErrorCategory.StoreUnavailable, "store-construction-details"),
+            name => name == "TRELLO_API_KEY" ? "environment-key" : null,
+            Path.Combine(directory.Path, "config.json"),
+            warnings.Add);
+
+        var validation = service.Validate();
+        Assert.False(validation.valid);
+        Assert.Equal("Token not set. Use: trello-cli --set-auth <api-key> <token>", validation.error);
+        Assert.Single(warnings);
+        Assert.DoesNotContain("store-construction-details", warnings[0]);
     }
 
     [Fact]
