@@ -3,7 +3,7 @@ using TrelloCli.Models;
 
 namespace TrelloCli.Services;
 
-public class TrelloApiService
+public class TrelloApiService : IAuthenticationChecker
 {
     private readonly HttpClient _http;
     private readonly ConfigService _config;

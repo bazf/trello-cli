@@ -17,6 +17,7 @@ public class ConfigService
     public string? ApiKey { get; private set; }
     public string? Token { get; private set; }
     public bool IsConfigured => !string.IsNullOrEmpty(ApiKey) && !string.IsNullOrEmpty(Token);
+    public CredentialStoreErrorCategory? LastCredentialStoreError { get; private set; }
 
     private readonly ICredentialStore? _credentialStore;
     private readonly Func<string, string?>? _environmentReader;
@@ -62,6 +63,7 @@ public class ConfigService
 
     public async Task LoadAsync()
     {
+        LastCredentialStoreError = null;
         ApiKey = Nonblank(_environmentReader!("TRELLO_API_KEY"));
         Token = Nonblank(_environmentReader("TRELLO_TOKEN"));
 
@@ -95,6 +97,11 @@ public class ConfigService
         {
             Token = await _credentialStore!.GetTokenAsync();
         }
+        catch (CredentialStoreException ex)
+        {
+            LastCredentialStoreError = ex.Category;
+            Warn("Unable to access the saved Trello token.");
+        }
         catch
         {
             Warn("Unable to access the saved Trello token.");
@@ -103,6 +110,7 @@ public class ConfigService
 
     public async Task<(bool success, string? error)> SaveAuthAsync(string apiKey, string token)
     {
+        LastCredentialStoreError = null;
         if (string.IsNullOrWhiteSpace(apiKey)) return (false, "API Key cannot be empty");
         if (string.IsNullOrWhiteSpace(token)) return (false, "Token cannot be empty");
 
@@ -120,6 +128,11 @@ public class ConfigService
         {
             previousToken = await _credentialStore!.GetTokenAsync();
         }
+        catch (CredentialStoreException ex)
+        {
+            LastCredentialStoreError = ex.Category;
+            return (false, "Unable to save authentication.");
+        }
         catch
         {
             return (false, "Unable to save authentication.");
@@ -136,6 +149,23 @@ public class ConfigService
             ApiKey = apiKey;
             Token = token;
             return (true, null);
+        }
+        catch (CredentialStoreException ex)
+        {
+            LastCredentialStoreError = ex.Category;
+            try
+            {
+                if (previousToken is null)
+                    await _credentialStore.DeleteTokenAsync();
+                else
+                    await _credentialStore.SetTokenAsync(previousToken);
+            }
+            catch
+            {
+                Warn("Unable to restore the saved Trello token.");
+            }
+
+            return (false, "Unable to save authentication.");
         }
         catch
         {
@@ -157,12 +187,19 @@ public class ConfigService
 
     public async Task<(bool success, string? error, bool environmentOverridesRemainActive)> ClearAuthAsync()
     {
+        LastCredentialStoreError = null;
         var storeDeleted = true;
         var configDeleted = true;
 
         try
         {
             await _credentialStore!.DeleteTokenAsync();
+        }
+        catch (CredentialStoreException ex)
+        {
+            LastCredentialStoreError = ex.Category;
+            storeDeleted = false;
+            Warn("Unable to remove the saved Trello token.");
         }
         catch
         {
@@ -196,10 +233,10 @@ public class ConfigService
     public (bool valid, string? error) Validate()
     {
         if (string.IsNullOrEmpty(ApiKey))
-            return (false, "API Key not set. Use: trello-cli --set-auth <api-key> <token>");
+            return (false, "API Key not set. Use: trello-cli --set-auth <api-key>");
 
         if (string.IsNullOrEmpty(Token))
-            return (false, "Token not set. Use: trello-cli --set-auth <api-key> <token>");
+            return (false, "Token not set. Use: trello-cli --set-auth <api-key> or set TRELLO_TOKEN.");
 
         return (true, null);
     }

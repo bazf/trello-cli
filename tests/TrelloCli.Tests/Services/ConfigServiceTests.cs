@@ -192,7 +192,7 @@ public class ConfigServiceTests
 
         var validation = service.Validate();
         Assert.False(validation.valid);
-        Assert.Equal("Token not set. Use: trello-cli --set-auth <api-key> <token>", validation.error);
+        Assert.Equal("Token not set. Use: trello-cli --set-auth <api-key> or set TRELLO_TOKEN.", validation.error);
         Assert.Single(warnings);
         Assert.DoesNotContain("store-token-details", warnings[0]);
     }
@@ -211,7 +211,7 @@ public class ConfigServiceTests
 
         var validation = service.Validate();
         Assert.False(validation.valid);
-        Assert.Equal("Token not set. Use: trello-cli --set-auth <api-key> <token>", validation.error);
+        Assert.Equal("Token not set. Use: trello-cli --set-auth <api-key> or set TRELLO_TOKEN.", validation.error);
         Assert.Single(warnings);
         Assert.DoesNotContain("store-construction-details", warnings[0]);
     }
