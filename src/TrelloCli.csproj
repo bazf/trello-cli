@@ -18,7 +18,7 @@
     <Description>CLI tool for Trello with AI-friendly JSON output</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/ZenoxZX/trello-cli</RepositoryUrl>
+    <RepositoryUrl>https://github.com/bazf/trello-cli</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 

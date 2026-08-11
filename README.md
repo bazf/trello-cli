@@ -29,7 +29,7 @@ Install directly from GitHub using the install script. Requires [Homebrew](https
 
 ```bash
 # Clone and install
-git clone https://github.com/ZenoxZX/trello-cli.git
+git clone https://github.com/bazf/trello-cli.git
 cd trello-cli
 ./install.sh
 ```
@@ -45,7 +45,7 @@ If you prefer to install manually or don't use Homebrew:
 
 ```bash
 # Clone the repository
-git clone https://github.com/ZenoxZX/trello-cli.git
+git clone https://github.com/bazf/trello-cli.git
 cd trello-cli
 
 # Install as global tool (requires .NET SDK 10.0+)
