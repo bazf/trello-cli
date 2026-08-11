@@ -19,7 +19,7 @@ public class LinuxCredentialStoreTests
     }
 
     [Fact]
-    public async Task SetTokenAsync_UsesTheExactSecretToolCommandAndWritesTheExactTokenWithoutANewline()
+    public async Task SetTokenAsync_ResolvesSecretToolFromPathAndWritesTheExactTokenWithoutANewline()
     {
         const string token = "linux-token-canary";
         var runner = new RecordingProcessRunner(_ => Success());
@@ -28,7 +28,7 @@ public class LinuxCredentialStoreTests
         await store.SetTokenAsync(token);
 
         var request = Assert.Single(runner.Requests);
-        Assert.Equal("/usr/bin/secret-tool", request.FileName);
+        Assert.Equal("secret-tool", request.FileName);
         Assert.Equal(["store", "--label=Trello CLI token", "service", "trello-cli", "account", "trello-token"], request.Arguments);
         Assert.Equal(token, request.StandardInput);
         Assert.DoesNotContain(token, request.Arguments);
@@ -44,7 +44,7 @@ public class LinuxCredentialStoreTests
 
         Assert.Equal("token\n", token);
         var request = Assert.Single(runner.Requests);
-        Assert.Equal("/usr/bin/secret-tool", request.FileName);
+        Assert.Equal("secret-tool", request.FileName);
         Assert.Equal(["lookup", "service", "trello-cli", "account", "trello-token"], request.Arguments);
         Assert.Null(request.StandardInput);
     }

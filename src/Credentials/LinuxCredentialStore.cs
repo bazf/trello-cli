@@ -2,7 +2,7 @@ namespace TrelloCli.Credentials;
 
 public sealed class LinuxCredentialStore : ICredentialStore
 {
-    private const string SecretToolPath = "/usr/bin/secret-tool";
+    private const string SecretToolPath = "secret-tool";
     private readonly IProcessRunner _processRunner;
     private readonly string _service;
     private readonly string _account;
