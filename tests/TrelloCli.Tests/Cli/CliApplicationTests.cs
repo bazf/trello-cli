@@ -330,6 +330,37 @@ public class CliApplicationTests
         Assert.Equal($"trello-cli v2.0.0{Environment.NewLine}", output.ToString());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("--help")]
+    [InlineData("-h")]
+    [InlineData("--version")]
+    [InlineData("-v")]
+    public async Task RunAsync_CredentialIndependentCommands_DoNotCreateConfiguration(string? command)
+    {
+        var configFactoryCalls = 0;
+        Task<ConfigService> CreateConfig()
+        {
+            configFactoryCalls++;
+            throw new InvalidOperationException("credential-loading-canary");
+        }
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var application = new CliApplication(
+            CreateConfig,
+            new FixedSecretReader(SecretReadResult.Success("unused-token")),
+            output,
+            error,
+            new RecordingServiceFactory());
+
+        await application.RunAsync(command is null ? [] : [command]);
+
+        Assert.Equal(0, configFactoryCalls);
+        Assert.DoesNotContain("credential-loading-canary", output.ToString());
+        Assert.DoesNotContain("credential-loading-canary", error.ToString());
+    }
+
     [Fact]
     public async Task DefaultServiceFactory_PreservesUnknownCommandOutput()
     {

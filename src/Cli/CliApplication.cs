@@ -8,7 +8,7 @@ public sealed class CliApplication
 {
     private static string Version => typeof(CliApplication).Assembly.GetName().Version!.ToString(3);
 
-    private readonly ConfigService _config;
+    private readonly Func<Task<ConfigService>> _configFactory;
     private readonly ISecretReader _secretReader;
     private readonly TextWriter _output;
     private readonly TextWriter _error;
@@ -19,9 +19,23 @@ public sealed class CliApplication
         ISecretReader secretReader,
         TextWriter output,
         TextWriter error,
+        ICliServiceFactory serviceFactory) : this(
+            () => Task.FromResult(config),
+            secretReader,
+            output,
+            error,
+            serviceFactory)
+    {
+    }
+
+    internal CliApplication(
+        Func<Task<ConfigService>> configFactory,
+        ISecretReader secretReader,
+        TextWriter output,
+        TextWriter error,
         ICliServiceFactory serviceFactory)
     {
-        _config = config;
+        _configFactory = configFactory;
         _secretReader = secretReader;
         _output = output;
         _error = error;
@@ -63,27 +77,29 @@ public sealed class CliApplication
             return;
         }
 
+        var config = await _configFactory();
+
         if (args[0] == "--clear-auth")
         {
-            var (success, clearError, environmentOverridesRemainActive) = await _config.ClearAuthAsync();
+            var (success, clearError, environmentOverridesRemainActive) = await config.ClearAuthAsync();
             if (success)
                 Write(ApiResponse<object>.Success(
                     new ClearAuthSuccessData("Persisted authentication cleared", environmentOverridesRemainActive)));
             else
-                WriteCredentialStoreFailure(clearError!, "CLEAR_ERROR");
+                WriteCredentialStoreFailure(config, clearError!, "CLEAR_ERROR");
             return;
         }
 
         if (args[0] != "--set-auth")
         {
-            var (valid, validationError) = _config.Validate();
+            var (valid, validationError) = config.Validate();
             if (!valid)
             {
-                WriteCredentialStoreFailure(validationError!, "AUTH_ERROR");
+                WriteCredentialStoreFailure(config, validationError!, "AUTH_ERROR");
                 return;
             }
 
-            var services = _serviceFactory.Create(_config);
+            var services = _serviceFactory.Create(config);
             if (args[0] == "--check-auth")
             {
                 Write(await services.AuthenticationChecker.CheckAuthAsync());
@@ -113,22 +129,22 @@ public sealed class CliApplication
             return;
         }
 
-        var (saveSuccess, authError) = await _config.SaveAuthAsync(args[1], secretResult.Token!);
+        var (saveSuccess, authError) = await config.SaveAuthAsync(args[1], secretResult.Token!);
         if (saveSuccess)
             Write(ApiResponse<object>.Success(new { message = "Authentication saved in the operating system credential store." }));
         else
-            WriteCredentialStoreFailure(authError!, "SAVE_ERROR");
+            WriteCredentialStoreFailure(config, authError!, "SAVE_ERROR");
     }
 
-    private void WriteCredentialStoreFailure(string error, string fallbackCode)
+    private void WriteCredentialStoreFailure(ConfigService config, string error, string fallbackCode)
     {
-        if (_config.LastCredentialStoreError == Credentials.CredentialStoreErrorCategory.StoreUnavailable)
+        if (config.LastCredentialStoreError == Credentials.CredentialStoreErrorCategory.StoreUnavailable)
         {
             Write(ApiResponse<object>.Fail("The operating system credential store is unavailable.", "CREDENTIAL_STORE_UNAVAILABLE"));
             return;
         }
 
-        if (_config.LastCredentialStoreError == Credentials.CredentialStoreErrorCategory.OperationFailed)
+        if (config.LastCredentialStoreError == Credentials.CredentialStoreErrorCategory.OperationFailed)
         {
             Write(ApiResponse<object>.Fail("The operating system credential store could not complete the operation.", "CREDENTIAL_STORE_ERROR"));
             return;

@@ -6,9 +6,8 @@ using TrelloCli.Utils;
 
 try
 {
-    var config = await ConfigService.CreateDefaultAsync(warningWriter: Console.Error.WriteLine);
     var application = new CliApplication(
-        config,
+        () => ConfigService.CreateDefaultAsync(warningWriter: Console.Error.WriteLine),
         new ConsoleSecretReader(),
         Console.Out,
         Console.Error,
