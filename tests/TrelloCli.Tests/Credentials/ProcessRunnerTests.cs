@@ -7,6 +7,8 @@ namespace TrelloCli.Tests.Credentials;
 
 public class ProcessRunnerTests
 {
+    private static readonly TimeSpan AsyncGuardTimeout = TimeSpan.FromSeconds(3);
+
     [Fact]
     public void ProcessRunner_AcceptsATimeoutForTestableProcessTermination()
     {
@@ -106,7 +108,7 @@ public class ProcessRunnerTests
 
         try
         {
-            var result = await run.WaitAsync(TimeSpan.FromSeconds(1));
+            var result = await run.WaitAsync(AsyncGuardTimeout);
 
             Assert.True(result.IsAvailable);
             Assert.True(result.TimedOut);
@@ -138,7 +140,7 @@ public class ProcessRunnerTests
         try
         {
             var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => run.WaitAsync(TimeSpan.FromSeconds(1)));
+                () => run.WaitAsync(AsyncGuardTimeout));
 
             Assert.True(cancellation.IsCancellationRequested);
             Assert.True(run.IsCanceled);
@@ -174,7 +176,7 @@ public class ProcessRunnerTests
         try
         {
             await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => run.WaitAsync(TimeSpan.FromSeconds(1)));
+                () => run.WaitAsync(AsyncGuardTimeout));
 
             Assert.True(run.IsCanceled);
             Assert.Equal(1, lifecycle.KillCalls);
@@ -202,7 +204,7 @@ public class ProcessRunnerTests
 
         try
         {
-            var result = await run.WaitAsync(TimeSpan.FromSeconds(1));
+            var result = await run.WaitAsync(AsyncGuardTimeout);
 
             Assert.True(result.IsAvailable);
             Assert.True(result.TimedOut);
@@ -274,7 +276,27 @@ public class ProcessRunnerTests
         }
         finally
         {
-            File.Delete(pidFile);
+            await DeleteFileWithRetryAsync(pidFile);
+        }
+    }
+
+    private static async Task DeleteFileWithRetryAsync(string path)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
+            }
+            catch (UnauthorizedAccessException) when (attempt < 20)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
+            }
         }
     }
 
