@@ -425,7 +425,8 @@ public static class CommandCatalog
             Notes:
             [
                 "Archives the cards but keeps the list. Each card can be restored with --unarchive-card.",
-                "One request regardless of how many cards the list holds."
+                "One request regardless of how many cards the list holds.",
+                "Returns true rather than the archived cards, because Trello sends none back; --move-all-cards does return the cards it moved."
             ]),
 
         new("--move-all-cards", Groups.List, "Move every card from one list to another.",
@@ -614,7 +615,11 @@ public static class CommandCatalog
         new("--remove-card-label", Groups.Card, "Remove one label from a card.",
             Arguments: [new("card-id", "Card to change."), new("label-id", "Label to remove.")],
             Examples: [$"{ToolName} --remove-card-label 5f2c...1f2a 5f2c...1f2b"],
-            Notes: ["Removes the label from this card only; the label itself stays on the board."]),
+            Notes:
+            [
+                "Removes the label from this card only; the label itself stays on the board.",
+                "Returns true rather than the resulting label ids, because Trello sends none back on removal."
+            ]),
 
         new("--delete-card", Groups.Card, "Delete a card.",
             Arguments: [new("card-id", "Card to delete.")],

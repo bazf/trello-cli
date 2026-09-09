@@ -79,11 +79,12 @@ public partial class TrelloApiService
             new FormUrlEncodedContent(new Dictionary<string, string> { ["value"] = labelId }),
             "Card or label not found");
 
-    public Task<ApiResponse<List<string>>> RemoveCardLabelAsync(string cardId, string labelId) =>
-        SendForListAsync<string>(
+    // Unlike adding, Trello answers this one with {"_value":null} rather than the resulting
+    // label ids, so there is nothing to deserialize and success is all it can report.
+    public Task<ApiResponse<bool>> RemoveCardLabelAsync(string cardId, string labelId) =>
+        SendForSuccessAsync(
             HttpMethod.Delete,
             BuildUrl($"/cards/{cardId}/idLabels/{labelId}"),
-            content: null,
             "Card or label not found");
 
     /// <summary>Applies a partial change to a card, used by the single-field setters below.</summary>

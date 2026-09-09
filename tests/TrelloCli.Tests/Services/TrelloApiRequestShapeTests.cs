@@ -72,6 +72,8 @@ public class TrelloApiRequestShapeTests
     [Fact]
     public async Task RemoveCardMemberDeletesTheMemberSpecificPath()
     {
+        // The member endpoints really do answer with an array of the remaining members,
+        // which is why these keep a list return type while the label one does not.
         var (service, handler) = await CreateAsync("[]");
 
         await service.RemoveCardMemberAsync("card-1", "member-1");
@@ -97,13 +99,46 @@ public class TrelloApiRequestShapeTests
     [Fact]
     public async Task RemoveCardLabelDeletesTheLabelSpecificPath()
     {
-        var (service, handler) = await CreateAsync("[]");
+        // Trello's actual body for this endpoint. It is an object, not the array that adding a
+        // label returns, so deserializing it as a list threw and surfaced as a bare ERROR --
+        // a stubbed "[]" hid that until the command was run against the real API.
+        var (service, handler) = await CreateAsync("""{"_value":null}""");
 
-        await service.RemoveCardLabelAsync("card-1", "label-1");
+        var response = await service.RemoveCardLabelAsync("card-1", "label-1");
 
+        Assert.True(response.Ok, response.Error);
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Delete, request.Method);
         Assert.Equal("/1/cards/card-1/idLabels/label-1", request.Path);
+    }
+
+    [Fact]
+    public async Task ArchiveAllCardsPostsToTheListAndToleratesTheEmptyObjectTrelloReturns()
+    {
+        // Also an object rather than the archived cards, unlike --move-all-cards.
+        var (service, handler) = await CreateAsync("{}");
+
+        var response = await service.ArchiveAllCardsAsync("list-1");
+
+        Assert.True(response.Ok, response.Error);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("/1/lists/list-1/archiveAllCards", request.Path);
+    }
+
+    [Fact]
+    public async Task MoveAllCardsStillReturnsTheCardsTrelloSendsBack()
+    {
+        var handler = new RoutingHandler(request =>
+            request.RequestUri!.AbsolutePath == "/1/lists/list-2"
+                ? """{"id":"list-2","idBoard":"board-9"}"""
+                : """[{"id":"card-1","name":"Moved"}]""");
+        var service = await CreateWithHandlerAsync(handler);
+
+        var response = await service.MoveAllCardsAsync("list-1", "list-2");
+
+        Assert.True(response.Ok, response.Error);
+        Assert.Equal("card-1", Assert.Single(response.Data!).Id);
     }
 
     [Fact]

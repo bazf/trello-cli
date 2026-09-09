@@ -415,8 +415,9 @@ trello-cli --remove-card-member <card-id> <member-id>
 # Labels
 trello-cli --add-card-label <card-id> <label-id>
 trello-cli --remove-card-label <card-id> <label-id>
-# Both return the card's resulting label IDs. Removing a label from a card
-# leaves the label itself on the board.
+# Adding returns the card's resulting label IDs; removing returns true, because
+# Trello sends no label list back on removal. Either way the label itself stays
+# defined on the board.
 ```
 
 ### Label Operations

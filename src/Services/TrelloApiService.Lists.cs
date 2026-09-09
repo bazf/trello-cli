@@ -56,11 +56,12 @@ public partial class TrelloApiService
             "UPDATE_FAILED",
             "List not found");
 
-    public Task<ApiResponse<List<Card>>> ArchiveAllCardsAsync(string listId) =>
-        SendForListAsync<Card>(
+    // Trello answers this with an empty object rather than the archived cards, so success is
+    // all it can report. --move-all-cards does return the moved cards.
+    public Task<ApiResponse<bool>> ArchiveAllCardsAsync(string listId) =>
+        SendForSuccessAsync(
             HttpMethod.Post,
             BuildUrl($"/lists/{listId}/archiveAllCards"),
-            content: null,
             "List not found");
 
     public async Task<ApiResponse<List<Card>>> MoveAllCardsAsync(string sourceListId, string targetListId)
