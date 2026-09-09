@@ -89,7 +89,22 @@ echo ""
 echo "Next steps:"
 echo "  1. Get your Trello API credentials from https://trello.com/app-key"
 echo "  2. Configure authentication:"
-echo "     trello-cli --set-auth <api-key> <token>"
+echo "     trello-cli --set-auth <api-key>"
+case "$(uname -s)" in
+    Darwin)
+        echo "     Enter the token at the hidden prompt; it is saved in macOS Keychain."
+        ;;
+    Linux)
+        echo "     Enter the token at the hidden prompt; it is saved in Linux Secret Service."
+        echo "     Linux requires libsecret-tools and a running D-Bus session with an unlocked Secret Service."
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        echo "     Enter the token at the hidden prompt; it is saved in Windows Credential Manager."
+        ;;
+    *)
+        echo "     Enter the token at the hidden prompt; it is saved in the operating system credential store."
+        ;;
+esac
 echo "  3. Verify setup:"
 echo "     trello-cli --check-auth"
 echo ""

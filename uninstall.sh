@@ -15,6 +15,34 @@ echo_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Offer credential cleanup while the CLI is still installed. The default is to
+# preserve credentials, and environment-variable credentials are never changed.
+if command -v trello-cli &> /dev/null; then
+    echo ""
+    REPLY=""
+    read -r -p "Remove saved trello-cli credentials before uninstalling? (y/N) " REPLY || true
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo_info "Removing saved trello-cli credentials..."
+        CLEAR_OUTPUT=""
+        if CLEAR_OUTPUT="$(trello-cli --clear-auth)"; then
+            CLEAR_STATUS=0
+        else
+            CLEAR_STATUS=$?
+        fi
+        printf '%s\n' "$CLEAR_OUTPUT"
+        if [ "$CLEAR_STATUS" -eq 0 ] && [[ $CLEAR_OUTPUT == *'"ok":true'* ]]; then
+            echo_info "Saved credentials removed"
+        else
+            echo_warn "Credential removal failed; the CLI will remain installed."
+            exit 1
+        fi
+    else
+        echo_info "Credentials preserved"
+    fi
+else
+    echo_warn "trello-cli is not in PATH; saved credentials were not removed."
+fi
+
 # Uninstall the global tool
 if dotnet tool list --global 2>/dev/null | grep -qi "trelloCli\|TrelloCli"; then
     echo_info "Uninstalling trello-cli global tool..."

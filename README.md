@@ -13,13 +13,23 @@ A CLI tool that provides Trello integration with Claude Code. With this tool, yo
 
 ## Installation
 
+`trello-cli` 2.0.0 requires the .NET 10 SDK to build. Credential storage is
+provided by the operating system:
+
+- Windows: Windows Credential Manager.
+- macOS: Keychain.
+- Linux: Secret Service over D-Bus. Install `secret-tool` (the
+  `libsecret-tools` package) and run a Secret Service provider such as GNOME
+  Keyring. A package by itself is not sufficient in a headless session; the
+  session must also have a D-Bus address and an unlocked Secret Service.
+
 ### Quick Install (Recommended)
 
 Install directly from GitHub using the install script. Requires [Homebrew](https://brew.sh).
 
 ```bash
 # Clone and install
-git clone https://github.com/ZenoxZX/trello-cli.git
+git clone https://github.com/bazf/trello-cli.git
 cd trello-cli
 ./install.sh
 ```
@@ -35,7 +45,7 @@ If you prefer to install manually or don't use Homebrew:
 
 ```bash
 # Clone the repository
-git clone https://github.com/ZenoxZX/trello-cli.git
+git clone https://github.com/bazf/trello-cli.git
 cd trello-cli
 
 # Install as global tool (requires .NET SDK 10.0+)
@@ -49,12 +59,20 @@ trello-cli --help
 ### Uninstalling
 
 ```bash
-# Using uninstall script
+# The script asks whether to remove saved credentials before removing the tool.
+# The default answer preserves credentials.
 ./uninstall.sh
 
-# Or manually
+# Or remove credentials and the tool manually
+trello-cli --clear-auth
 dotnet tool uninstall --global TrelloCli
 ```
+
+Uninstalling the .NET tool alone does not remove credentials. `--clear-auth`
+removes the saved API key configuration and the token in the OS credential
+store, but does not revoke the Trello token or unset `TRELLO_API_KEY` /
+`TRELLO_TOKEN`. Environment overrides therefore remain active until they are
+unset separately.
 
 ### Setting Up Trello API Credentials
 
@@ -63,12 +81,48 @@ dotnet tool uninstall --global TrelloCli
 3. Configure the CLI:
 
 ```bash
-# Set your credentials
-trello-cli --set-auth <api-key> <token>
+# Save the API key and enter the token at the hidden terminal prompt
+trello-cli --set-auth <api-key>
 
 # Verify authentication
 trello-cli --check-auth
 ```
+
+The token is never accepted as a positional argument. On Windows it is saved
+under target `trello-cli` / username `trello-token` in Credential Manager; on
+macOS under service `trello-cli` / account `trello-token` in Keychain; and on
+Linux under Secret Service attributes `service=trello-cli` and
+`account=trello-token`. The API key remains in
+`~/.trello-cli/config.json`; newly saved configuration never serializes the
+token.
+
+For CI, containers, SSH sessions, and other headless environments, provide both
+values through the environment instead of using the interactive command:
+
+```bash
+export TRELLO_API_KEY='<api-key>'
+export TRELLO_TOKEN='<token>'
+trello-cli --check-auth
+```
+
+Environment values have precedence: `TRELLO_API_KEY` overrides the saved API
+key and a nonblank `TRELLO_TOKEN` bypasses credential-store access and legacy
+migration for that run.
+
+### Migration from releases before 2.0.0
+
+If an existing `~/.trello-cli/config.json` contains a plaintext token, 2.0.0
+attempts a one-time migration. It writes the token to the OS credential store,
+reads it back, compares the exact value, and only then atomically rewrites the
+file with the API key alone. If storage, verification, or the rewrite fails,
+the original file and token remain available for the current run, a sanitized
+warning is emitted, and migration can be retried on a later run. A failed new
+setup restores the previous secure token (or removes the newly created entry)
+if the API-key file cannot be persisted.
+
+`--clear-auth` attempts secure-token and configuration deletion independently.
+It reports partial failure rather than claiming full cleanup and includes
+`environmentOverridesRemainActive` in its success data.
 
 ## Usage
 
@@ -87,8 +141,8 @@ Simply mention "Trello" when talking to Claude Code:
 |------|-------------|
 | [docs/instruction.md](docs/instruction.md) | Detailed command reference and usage examples for AI |
 | [docs/system-prompt.md](docs/system-prompt.md) | System prompt for AI integration |
-| [.claude/skills/trello-cli/SKILL.md](.claude/skills/trello-cli/SKILL.md) | Claude Code skill definition and quick reference |
-| [.claude/skills/trello-cli/REFERENCE.md](.claude/skills/trello-cli/REFERENCE.md) | Complete documentation of all commands |
+| [plugins/trello-cli/skills/trello-cli/SKILL.md](plugins/trello-cli/skills/trello-cli/SKILL.md) | Claude Code skill definition and quick reference |
+| [plugins/trello-cli/skills/trello-cli/REFERENCE.md](plugins/trello-cli/skills/trello-cli/REFERENCE.md) | Complete documentation of all commands |
 
 ## Claude Code Skill System
 
@@ -104,7 +158,7 @@ To use this skill everywhere on your system, copy it to your personal `.claude` 
 
 ```bash
 # Copy the skill folder to your personal directory
-cp -r .claude/skills/trello-cli ~/.claude/skills/
+cp -r plugins/trello-cli/skills/trello-cli ~/.claude/skills/
 ```
 
 After this, Claude Code will automatically activate this skill whenever you mention "Trello" in any directory.
@@ -138,7 +192,7 @@ description: Trello board, list and card management via CLI...
 
 ```bash
 # Authentication
-trello-cli --set-auth <api-key> <token>
+trello-cli --set-auth <api-key>  # token is entered at the hidden prompt
 trello-cli --clear-auth
 trello-cli --check-auth
 

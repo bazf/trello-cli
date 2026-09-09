@@ -15,6 +15,22 @@ Manage Trello boards, lists, and cards using the `trello-cli` command.
 
 ## Quick Reference
 
+### Authentication
+
+```bash
+trello-cli --set-auth <api-key>  # Enter the token at the hidden prompt
+trello-cli --check-auth
+trello-cli --clear-auth          # Environment overrides remain active
+```
+
+Never pass a token as an argument. For headless use, set both
+`TRELLO_API_KEY` and `TRELLO_TOKEN`. Tokens use Windows Credential Manager,
+macOS Keychain, or Linux Secret Service. Linux requires `libsecret-tools` and
+a running, unlocked Secret Service on D-Bus. Legacy plaintext tokens are
+deleted only after secure-store read-back succeeds; migration failure preserves
+the legacy file and emits a sanitized warning. Clearing persisted auth does not
+revoke the Trello token or unset environment variables.
+
 ### Board & List
 
 ```bash
