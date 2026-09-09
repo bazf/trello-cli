@@ -135,6 +135,24 @@ Simply mention "Trello" when talking to Claude Code:
 "List my Trello boards"
 ```
 
+### Discovering what the CLI can do
+
+The CLI documents itself, so neither you nor an agent has to guess:
+
+```bash
+trello-cli --help                 # every command, grouped, plus the global limits
+trello-cli --help --create-card   # usage, options and limits for a single command
+trello-cli --commands             # the same catalog as JSON, for programmatic use
+trello-cli --commands --create-card
+```
+
+`--commands` returns the standard `{"ok":true,"data":...}` envelope and carries the
+command list, each command's arguments, options and per-command limits, the error
+codes, and the restrictions listed below. It is the recommended entry point for an
+agent: one call is enough to learn the whole surface. An unrecognized command is
+reported as `UNKNOWN_COMMAND` with the closest match and a pointer back to these
+two commands.
+
 ## Documentation
 
 | File | Description |
@@ -190,58 +208,116 @@ description: Trello board, list and card management via CLI...
 
 ## Command Summary
 
-```bash
-# Authentication
-trello-cli --set-auth <api-key>  # token is entered at the hidden prompt
-trello-cli --clear-auth
-trello-cli --check-auth
+Generated from the same catalog the CLI serves through `--help` and `--commands`;
+run those for the authoritative, always-current version.
 
-# Board operations
-trello-cli --get-boards
-trello-cli --get-board <board-id>
+| Command | What it does |
+|---------|--------------|
+| `--help [<command>]` | Show this help, or the details of a single command. |
+| `--commands [<command>]` | Print the command catalog, limits and error codes as JSON. |
+| `--version` | Print the tool version. |
+| `--set-auth <api-key>` | Save the API key and read the token from a hidden prompt. |
+| `--check-auth` | Verify the credentials against Trello and return the member. |
+| `--clear-auth` | Remove persisted credentials. |
+| `--get-boards` | List the open boards of the authenticated member. |
+| `--get-board <board-id>` | Get one board. |
+| `--get-lists <board-id>` | Get the open lists of a board. |
+| `--create-list <board-id> <name>` | Create a list on a board. |
+| `--move-list <list-id> <pos>` | Reposition a list on its board. |
+| `--bulk-move-lists <list-id:pos>...` | Reposition several lists in one call. |
+| `--get-cards <list-id>` | Get the cards of a list. |
+| `--get-all-cards <board-id>` | Get every open card on a board. |
+| `--get-card <card-id>` | Get one card. |
+| `--create-card <list-id> <name> [--desc <text>] [--due <date>] [--labels <ids>] [--members <ids>]` | Create a card in a list. |
+| `--update-card <card-id> [--name <text>] [--desc <text>] [--due <date>] [--labels <ids>] [--members <ids>] [--closed <true|false>]` | Change fields of a card. |
+| `--move-card <card-id> <target-list-id>` | Move a card to another list. |
+| `--archive-card <card-id>` | Archive a card. |
+| `--unarchive-card <card-id>` | Restore an archived card. |
+| `--delete-card <card-id>` | Delete a card. **Irreversible.** |
+| `--get-comments <card-id>` | Get the comments on a card. |
+| `--add-comment <card-id> <text>` | Add a comment to a card. |
+| `--get-labels <board-id>` | List the labels defined on a board. |
+| `--create-label <board-id> <name> [--color <color>]` | Create a label on a board. |
+| `--update-label <label-id> [--name <text>] [--color <color>]` | Rename or recolor a label. |
+| `--delete-label <label-id>` | Delete a label. **Irreversible.** |
+| `--list-attachments <card-id>` | List the attachments on a card. |
+| `--upload-attachment <card-id> <file-path> [--name <text>]` | Upload a local file to a card. |
+| `--attach-url <card-id> <url> [--name <text>]` | Attach a URL to a card. |
+| `--delete-attachment <card-id> <attachment-id>` | Delete an attachment from a card. **Irreversible.** |
+| `--get-checklists <card-id>` | Get the checklists of a card, including their items. |
+| `--create-checklist <card-id> <name>` | Create a checklist on a card. |
+| `--delete-checklist <checklist-id>` | Delete a checklist and its items. **Irreversible.** |
+| `--add-checklist-item <checklist-id> <name>` | Add an item to a checklist. |
+| `--update-checklist-item <card-id> <item-id> <state>` | Mark a checklist item complete or incomplete. |
+| `--delete-checklist-item <checklist-id> <item-id>` | Delete an item from a checklist. **Irreversible.** |
 
-# List operations
-trello-cli --get-lists <board-id>
-trello-cli --create-list <board-id> "<name>"
+Notes worth knowing up front:
 
-# Card operations
-trello-cli --get-cards <list-id>
-trello-cli --get-all-cards <board-id>
-trello-cli --get-card <card-id>
-trello-cli --create-card <list-id> "<name>" [--desc "<desc>"] [--due "YYYY-MM-DD"] [--labels "<ids>"] [--members "<ids>"]
-trello-cli --update-card <card-id> [--name "<name>"] [--desc "<desc>"] [--due "<date>"] [--labels "<ids>"] [--members "<ids>"]
-trello-cli --move-card <card-id> <target-list-id>
-trello-cli --archive-card <card-id>
-trello-cli --unarchive-card <card-id>
-trello-cli --delete-card <card-id>
+- `--update-checklist-item` takes a **card** ID, while `--add-checklist-item` and
+  `--delete-checklist-item` take a **checklist** ID.
+- Downloading attachments is not supported: Trello's download API requires browser
+  authentication. Use `--attach-url` to link an attachment onto another card.
+- `--labels` and `--members` replace the whole set on a card; pass `""` to clear it.
 
-# Label operations
-trello-cli --get-labels <board-id>
-trello-cli --create-label <board-id> "<name>" [--color <color>]
-trello-cli --update-label <label-id> [--name "<name>"] [--color <color>]
-trello-cli --delete-label <label-id>
+## Limits and restrictions
 
-# Comment operations
-trello-cli --get-comments <card-id>
-trello-cli --add-comment <card-id> "<text>"
+The same list is printed by `trello-cli --help` and returned by
+`trello-cli --commands` under `data.restrictions`.
 
-# Attachment operations
-trello-cli --list-attachments <card-id>
-trello-cli --upload-attachment <card-id> <file-path> [--name "<name>"]
-trello-cli --attach-url <card-id> <url> [--name "<name>"]
-trello-cli --delete-attachment <card-id> <attachment-id>
+**Output and exit status**
 
-# Note: Downloading attachments is not supported - Trello's download API
-# requires browser authentication. Use --attach-url to link attachments.
+- Each run prints one JSON object and exits 0 even when the operation failed; branch on "ok", never on the exit code.
+- Failure messages are deliberately sanitized: no request URLs, request bodies or Trello response payloads are echoed.
 
-# Checklist operations
-trello-cli --get-checklists <card-id>
-trello-cli --create-checklist <card-id> "<name>"
-trello-cli --delete-checklist <checklist-id>
-trello-cli --add-checklist-item <checklist-id> "<name>"
-trello-cli --update-checklist-item <card-id> <item-id> <complete|incomplete>
-trello-cli --delete-checklist-item <checklist-id> <item-id>
-```
+**Authentication**
+
+- Every command except `--help`, `--version`, `--commands`, `--set-auth` and `--clear-auth` requires valid credentials.
+- `--set-auth` needs an interactive terminal for the token prompt; in CI, containers and SSH sessions set `TRELLO_API_KEY` and `TRELLO_TOKEN` instead.
+- `--clear-auth` removes persisted credentials only. It neither revokes the Trello token nor unsets environment variables.
+- The CLI acts as the owner of the token: it can only see and change what that Trello account may see and change.
+
+**Not supported (no command exists)**
+
+- Boards are read-only: they cannot be created, renamed, closed or deleted.
+- Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
+- Downloading attachment content is not supported, because Trello's download endpoint requires browser authentication. Use `--attach-url` to link an existing attachment onto another card.
+- No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
+- Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
+- No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.
+- Comments can be read and added, but not edited or deleted.
+- Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
+- Except for `--bulk-move-lists` there is no batching: one command performs one operation.
+
+**What the read commands return**
+
+- `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; closed boards, archived lists and archived cards are omitted.
+- An archived card is still readable with `--get-card` and can be restored with `--unarchive-card`.
+- `--get-labels` returns at most 1000 labels for a board.
+- Results are returned exactly as Trello sends them, unpaged; large boards produce large JSON documents.
+
+**Argument handling**
+
+- Options are matched by exact name and the first occurrence wins; unknown or misspelled options are ignored silently instead of failing.
+- The value after an option is taken literally, so quote any value containing spaces and pass a value that starts with a dash carefully.
+- `--labels` and `--members` take comma-separated IDs and replace the entire set on the card; pass an empty string to clear it.
+- `--update-card` ignores an empty `--name`, while `--desc` "" and `--due` "" clear those fields. Calling it without any field returns `NO_PARAMS`.
+- Due dates are forwarded to Trello unvalidated; use ISO-8601 (YYYY-MM-DD or a full timestamp).
+- Label colors are not validated locally; an unsupported color is rejected by Trello as `HTTP_ERROR`.
+- `--update-checklist-item` takes a card ID, while `--add-checklist-item` and `--delete-checklist-item` take a checklist ID.
+
+**Irreversible operations**
+
+- `--delete-card`, `--delete-label`, `--delete-checklist`, `--delete-checklist-item` and `--delete-attachment` are permanent and have no undo.
+- `--archive-card` is the recoverable alternative to `--delete-card`.
+- `--delete-label` removes the label from every card on the board.
+- `--bulk-move-lists` applies moves in order and stops at the first failure; moves already applied are not rolled back.
+
+**Network and rate limits**
+
+- Trello enforces rate limits per key and per token (documented as 300 requests per 10 seconds per API key and 100 per 10 seconds per token). A throttled request surfaces as `HTTP_ERROR` with status 429.
+- No request is retried and no backoff is applied; the caller decides whether to retry.
+- HTTP redirects are not followed.
+- Attachment size limits are enforced by Trello and depend on the workspace plan; the file size is not checked before upload, so an oversized file fails as `HTTP_ERROR`.
 
 ## Requirements
 

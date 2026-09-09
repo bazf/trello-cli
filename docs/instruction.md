@@ -8,6 +8,26 @@ All responses are compact JSON:
 - Success: `{"ok":true,"data":...}`
 - Error: `{"ok":false,"error":"...","code":"..."}`
 
+## Discovering Commands
+
+The CLI is self-documenting; never guess a command name or a limit:
+
+```bash
+trello-cli --help                 # every command, grouped, plus the global limits
+trello-cli --help --create-card   # usage, options and limits for one command
+trello-cli --commands             # the same catalog as JSON: commands, limits, error codes
+trello-cli --commands --create-card
+```
+
+`--commands` answers in the usual envelope, so one call gives you the entire surface:
+
+```json
+{"ok":true,"data":{"tool":"trello-cli","version":"2.0.0","commands":[...],"errorCodes":[...],"restrictions":[...]}}
+```
+
+An unknown command returns `{"ok":false,"code":"UNKNOWN_COMMAND"}` with the closest
+match and a pointer back to `--help` and `--commands`, so recovery needs no guessing.
+
 ## Available Commands
 
 ### Authentication
@@ -53,12 +73,22 @@ trello-cli --get-board <board-id>
 ### List Operations
 
 ```bash
-# Get all lists in a board
+# Get all lists in a board (archived lists are not returned)
 trello-cli --get-lists <board-id>
 
 # Create a new list
 trello-cli --create-list <board-id> "<list-name>"
+
+# Reposition a list: top, bottom, or a number
+trello-cli --move-list <list-id> top
+
+# Reposition several lists in one call (<list-id>:<pos> pairs)
+trello-cli --bulk-move-lists <list-id>:top <list-id>:bottom
 ```
+
+Lists cannot be renamed, archived or deleted through this CLI. `--bulk-move-lists`
+applies the pairs in order and stops at the first failure; the moves already applied
+stay applied.
 
 ### Card Operations
 
@@ -84,10 +114,14 @@ trello-cli --update-card <card-id> --desc "<new-description>"
 trello-cli --update-card <card-id> --due "2025-01-15"
 trello-cli --update-card <card-id> --name "<name>" --desc "<desc>" --due "<date>"
 
-# Move card to another list
+# Move card to another list (same board only)
 trello-cli --move-card <card-id> <target-list-id>
 
-# Delete a card
+# Archive / restore a card (reversible; prefer this over deleting)
+trello-cli --archive-card <card-id>
+trello-cli --unarchive-card <card-id>
+
+# Delete a card permanently (cannot be undone)
 trello-cli --delete-card <card-id>
 
 # Get comments on a card
@@ -113,6 +147,43 @@ trello-cli --update-label <label-id> --name "<new-name>" --color <new-color>
 
 # Delete a label
 trello-cli --delete-label <label-id>
+```
+
+### Attachment Operations
+
+```bash
+# List attachments on a card
+trello-cli --list-attachments <card-id>
+
+# Upload a local file
+trello-cli --upload-attachment <card-id> <file-path> --name "<attachment-name>"
+
+# Attach a URL (also how an attachment is linked onto another card)
+trello-cli --attach-url <card-id> <url> --name "<attachment-name>"
+
+# Delete an attachment (permanent)
+trello-cli --delete-attachment <card-id> <attachment-id>
+```
+
+Downloading attachment content is not supported: Trello's download API requires
+browser authentication. Take the `url` from `--list-attachments` and pass it to
+`--attach-url` when a file has to reach another card.
+
+### Checklist Operations
+
+```bash
+# Get checklists and their items (the only source of checklist and item IDs)
+trello-cli --get-checklists <card-id>
+
+# Create and delete checklists
+trello-cli --create-checklist <card-id> "<checklist-name>"
+trello-cli --delete-checklist <checklist-id>
+
+# Items: note that updating takes the CARD id, adding and deleting take the CHECKLIST id
+trello-cli --add-checklist-item <checklist-id> "<item-name>"
+trello-cli --update-checklist-item <card-id> <item-id> complete
+trello-cli --update-checklist-item <card-id> <item-id> incomplete
+trello-cli --delete-checklist-item <checklist-id> <item-id>
 ```
 
 ## Response Examples
@@ -154,13 +225,92 @@ trello-cli --delete-label <label-id>
 
 ## Error Codes
 
+The same table is returned by `trello-cli --commands` under `data.errorCodes`.
+
 | Code | Meaning |
 |------|---------|
-| `AUTH_ERROR` | Not authenticated or invalid credentials |
-| `NOT_FOUND` | Board/List/Card not found |
-| `MISSING_PARAM` | Required parameter missing |
-| `HTTP_ERROR` | Network or API error |
-| `ERROR` | General error |
+| `AUTH_ERROR` | Credentials are missing or incomplete. |
+| `UNAUTHORIZED` | Trello rejected the API key or token. |
+| `UNKNOWN_COMMAND` | The command is not recognized; run --help or --commands for the list. |
+| `MISSING_PARAM` | A required argument was not provided. |
+| `INVALID_PARAM` | An argument was provided in an unsupported form. |
+| `NO_PARAMS` | An update command was called without any field to change. |
+| `NOT_FOUND` | The board, list, card, label, checklist, item or attachment does not exist or is not visible to the token. |
+| `FILE_NOT_FOUND` | The local file passed to --upload-attachment does not exist. |
+| `CREATE_FAILED` | Trello accepted the request but returned no usable resource. |
+| `UPDATE_FAILED` | Trello accepted the request but returned no usable resource. |
+| `UPLOAD_FAILED` | The attachment upload returned no usable resource. |
+| `ATTACH_FAILED` | The URL attachment returned no usable resource. |
+| `HTTP_ERROR` | The Trello request failed; the message carries the HTTP status code when one was received. |
+| `TOKEN_ARGUMENT_REJECTED` | A token was passed on the command line instead of the hidden prompt. |
+| `TOKEN_REQUIRED` | The token prompt received an empty value. |
+| `TOKEN_INPUT_CANCELLED` | Token entry was cancelled. |
+| `INTERACTIVE_REQUIRED` | --set-auth needs a terminal; set TRELLO_API_KEY and TRELLO_TOKEN instead. |
+| `CREDENTIAL_STORE_UNAVAILABLE` | The operating system credential store could not be reached. |
+| `CREDENTIAL_STORE_ERROR` | The operating system credential store failed to complete the operation. |
+| `SAVE_ERROR` | Authentication could not be persisted. |
+| `CLEAR_ERROR` | Persisted authentication could not be fully removed. |
+| `ERROR` | Unclassified failure. |
+
+## Restrictions
+
+Printed by `trello-cli --help` and returned by `trello-cli --commands` under
+`data.restrictions`.
+
+**Output and exit status**
+
+- Each run prints one JSON object and exits 0 even when the operation failed; branch on "ok", never on the exit code.
+- Failure messages are deliberately sanitized: no request URLs, request bodies or Trello response payloads are echoed.
+
+**Authentication**
+
+- Every command except `--help`, `--version`, `--commands`, `--set-auth` and `--clear-auth` requires valid credentials.
+- `--set-auth` needs an interactive terminal for the token prompt; in CI, containers and SSH sessions set `TRELLO_API_KEY` and `TRELLO_TOKEN` instead.
+- `--clear-auth` removes persisted credentials only. It neither revokes the Trello token nor unsets environment variables.
+- The CLI acts as the owner of the token: it can only see and change what that Trello account may see and change.
+
+**Not supported (no command exists)**
+
+- Boards are read-only: they cannot be created, renamed, closed or deleted.
+- Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
+- Downloading attachment content is not supported, because Trello's download endpoint requires browser authentication. Use `--attach-url` to link an existing attachment onto another card.
+- No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
+- Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
+- No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.
+- Comments can be read and added, but not edited or deleted.
+- Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
+- Except for `--bulk-move-lists` there is no batching: one command performs one operation.
+
+**What the read commands return**
+
+- `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; closed boards, archived lists and archived cards are omitted.
+- An archived card is still readable with `--get-card` and can be restored with `--unarchive-card`.
+- `--get-labels` returns at most 1000 labels for a board.
+- Results are returned exactly as Trello sends them, unpaged; large boards produce large JSON documents.
+
+**Argument handling**
+
+- Options are matched by exact name and the first occurrence wins; unknown or misspelled options are ignored silently instead of failing.
+- The value after an option is taken literally, so quote any value containing spaces and pass a value that starts with a dash carefully.
+- `--labels` and `--members` take comma-separated IDs and replace the entire set on the card; pass an empty string to clear it.
+- `--update-card` ignores an empty `--name`, while `--desc` "" and `--due` "" clear those fields. Calling it without any field returns `NO_PARAMS`.
+- Due dates are forwarded to Trello unvalidated; use ISO-8601 (YYYY-MM-DD or a full timestamp).
+- Label colors are not validated locally; an unsupported color is rejected by Trello as `HTTP_ERROR`.
+- `--update-checklist-item` takes a card ID, while `--add-checklist-item` and `--delete-checklist-item` take a checklist ID.
+
+**Irreversible operations**
+
+- `--delete-card`, `--delete-label`, `--delete-checklist`, `--delete-checklist-item` and `--delete-attachment` are permanent and have no undo.
+- `--archive-card` is the recoverable alternative to `--delete-card`.
+- `--delete-label` removes the label from every card on the board.
+- `--bulk-move-lists` applies moves in order and stops at the first failure; moves already applied are not rolled back.
+
+**Network and rate limits**
+
+- Trello enforces rate limits per key and per token (documented as 300 requests per 10 seconds per API key and 100 per 10 seconds per token). A throttled request surfaces as `HTTP_ERROR` with status 429.
+- No request is retried and no backoff is applied; the caller decides whether to retry.
+- HTTP redirects are not followed.
+- Attachment size limits are enforced by Trello and depend on the workspace plan; the file size is not checked before upload, so an oversized file fails as `HTTP_ERROR`.
 
 ## Workflow Examples
 
