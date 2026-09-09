@@ -65,480 +65,89 @@ public partial class TrelloApiService : IAuthenticationChecker
         return await _http.SendAsync(request);
     }
 
-    // Board operations
-    public async Task<ApiResponse<List<Board>>> GetBoardsAsync()
+    // Every endpoint reports failure the same three ways. notFoundMessage is nullable on
+    // purpose: several endpoints deliberately let a 404 fall through as HTTP_ERROR, and the
+    // error-code table documents that, so it cannot be applied uniformly.
+    private async Task<ApiResponse<T>> ExecuteAsync<T>(
+        Func<Task<ApiResponse<T>>> operation,
+        string? notFoundMessage = null)
     {
         try
         {
-            var url = BuildUrl("/members/me/boards", "filter=open");
-            var response = await GetStringAsync(url);
-            var boards = JsonSerializer.Deserialize<List<Board>>(response) ?? new();
-            return ApiResponse<List<Board>>.Success(boards);
+            return await operation();
+        }
+        catch (HttpRequestException exception)
+            when (notFoundMessage is not null && exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return ApiResponse<T>.Fail(notFoundMessage, "NOT_FOUND");
         }
         catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Board>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
+            return ApiResponse<T>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
-            return ApiResponse<List<Board>>.Fail(UnexpectedErrorMessage, "ERROR");
+            return ApiResponse<T>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
-    public async Task<ApiResponse<Board>> GetBoardAsync(string boardId)
-    {
-        try
+    /// <summary>GET a collection; an empty body is an empty collection, not a failure.</summary>
+    private Task<ApiResponse<List<T>>> GetListAsync<T>(string url, string? notFoundMessage) =>
+        ExecuteAsync(async () =>
         {
-            var url = BuildUrl($"/boards/{boardId}");
-            var response = await GetStringAsync(url);
-            var board = JsonSerializer.Deserialize<Board>(response);
-            return board != null
-                ? ApiResponse<Board>.Success(board)
-                : ApiResponse<Board>.Fail("Board not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Board>.Fail("Board not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Board>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Board>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
+            var body = await GetStringAsync(url);
+            return ApiResponse<List<T>>.Success(JsonSerializer.Deserialize<List<T>>(body) ?? new());
+        }, notFoundMessage);
 
-    // List operations
-    public async Task<ApiResponse<List<TrelloList>>> GetListsAsync(string boardId)
-    {
-        try
+    /// <summary>GET a single resource.</summary>
+    private Task<ApiResponse<T>> GetObjectAsync<T>(
+        string url,
+        string missingMessage,
+        string missingCode,
+        string? notFoundMessage) where T : class =>
+        ExecuteAsync(async () =>
         {
-            var url = BuildUrl($"/boards/{boardId}/lists", "filter=open");
-            var response = await GetStringAsync(url);
-            var lists = JsonSerializer.Deserialize<List<TrelloList>>(response) ?? new();
-            return ApiResponse<List<TrelloList>>.Success(lists);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<List<TrelloList>>.Fail("Board not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<List<TrelloList>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<List<TrelloList>>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
+            var body = await GetStringAsync(url);
+            var value = JsonSerializer.Deserialize<T>(body);
+            return value is not null
+                ? ApiResponse<T>.Success(value)
+                : ApiResponse<T>.Fail(missingMessage, missingCode);
+        }, notFoundMessage);
 
-    public async Task<ApiResponse<TrelloList>> MoveListAsync(string listId, string pos)
-    {
-        try
+    /// <summary>Send a request and read the resource Trello returns.</summary>
+    private Task<ApiResponse<T>> SendForObjectAsync<T>(
+        HttpMethod method,
+        string url,
+        HttpContent? content,
+        string failureMessage,
+        string failureCode,
+        string? notFoundMessage) where T : class =>
+        ExecuteAsync(async () =>
         {
-            var url = BuildUrl($"/lists/{listId}");
-            var formData = new Dictionary<string, string> { ["pos"] = pos };
-            var content = new FormUrlEncodedContent(formData);
-            var response = await SendAsync(HttpMethod.Put, url, content);
+            var response = await SendAsync(method, url, content);
             response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var list = JsonSerializer.Deserialize<TrelloList>(responseContent);
-            return list != null
-                ? ApiResponse<TrelloList>.Success(list)
-                : ApiResponse<TrelloList>.Fail("Failed to move list", "UPDATE_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<TrelloList>.Fail("List not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<TrelloList>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<TrelloList>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
+            var body = await response.Content.ReadAsStringAsync();
+            var value = JsonSerializer.Deserialize<T>(body);
+            return value is not null
+                ? ApiResponse<T>.Success(value)
+                : ApiResponse<T>.Fail(failureMessage, failureCode);
+        }, notFoundMessage);
 
-    public async Task<ApiResponse<TrelloList>> CreateListAsync(string boardId, string name)
-    {
-        try
+    /// <summary>Send a request whose response body carries nothing worth reading.</summary>
+    private Task<ApiResponse<bool>> SendForSuccessAsync(
+        HttpMethod method,
+        string url,
+        string? notFoundMessage,
+        HttpContent? content = null) =>
+        ExecuteAsync(async () =>
         {
-            var url = BuildUrl("/lists", $"name={Uri.EscapeDataString(name)}&idBoard={boardId}");
-            var response = await SendAsync(HttpMethod.Post, url);
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-            var list = JsonSerializer.Deserialize<TrelloList>(content);
-            return list != null
-                ? ApiResponse<TrelloList>.Success(list)
-                : ApiResponse<TrelloList>.Fail("Failed to create list", "CREATE_FAILED");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<TrelloList>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<TrelloList>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    // Card operations
-    public async Task<ApiResponse<List<Card>>> GetCardsInListAsync(string listId)
-    {
-        try
-        {
-            var url = BuildUrl($"/lists/{listId}/cards");
-            var response = await GetStringAsync(url);
-            var cards = JsonSerializer.Deserialize<List<Card>>(response) ?? new();
-            return ApiResponse<List<Card>>.Success(cards);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<List<Card>>.Fail("List not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<List<Card>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<List<Card>>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<List<Card>>> GetCardsInBoardAsync(string boardId)
-    {
-        try
-        {
-            var url = BuildUrl($"/boards/{boardId}/cards", "filter=open");
-            var response = await GetStringAsync(url);
-            var cards = JsonSerializer.Deserialize<List<Card>>(response) ?? new();
-            return ApiResponse<List<Card>>.Success(cards);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<List<Card>>.Fail("Board not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<List<Card>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<List<Card>>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Card>> GetCardAsync(string cardId)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}");
-            var response = await GetStringAsync(url);
-            var card = JsonSerializer.Deserialize<Card>(response);
-            return card != null
-                ? ApiResponse<Card>.Success(card)
-                : ApiResponse<Card>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Card>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Card>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Card>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Card>> CreateCardAsync(string listId, string name, string? desc = null, string? due = null, string? labels = null, string? members = null)
-    {
-        try
-        {
-            var url = BuildUrl("/cards");
-
-            var formData = new Dictionary<string, string>
-            {
-                ["idList"] = listId,
-                ["name"] = name
-            };
-            if (!string.IsNullOrEmpty(desc))
-                formData["desc"] = desc;
-            if (!string.IsNullOrEmpty(due))
-                formData["due"] = due;
-            if (!string.IsNullOrEmpty(labels))
-                formData["idLabels"] = labels;
-            if (!string.IsNullOrEmpty(members))
-                formData["idMembers"] = members;
-
-            var content = new FormUrlEncodedContent(formData);
-            var response = await SendAsync(HttpMethod.Post, url, content);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var card = JsonSerializer.Deserialize<Card>(responseContent);
-            return card != null
-                ? ApiResponse<Card>.Success(card)
-                : ApiResponse<Card>.Fail("Failed to create card", "CREATE_FAILED");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Card>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Card>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Card>> UpdateCardAsync(string cardId, string? name = null, string? desc = null,
-        string? due = null, string? listId = null, string? labels = null, string? members = null, bool? closed = null)
-    {
-        try
-        {
-            var formData = new Dictionary<string, string>();
-            if (!string.IsNullOrEmpty(name))
-                formData["name"] = name;
-            if (desc != null)
-                formData["desc"] = desc;
-            if (due != null)
-                formData["due"] = due;
-            if (!string.IsNullOrEmpty(listId))
-                formData["idList"] = listId;
-            if (labels != null)
-                formData["idLabels"] = labels;
-            if (members != null)
-                formData["idMembers"] = members;
-            if (closed.HasValue)
-                formData["closed"] = closed.Value.ToString().ToLower();
-
-            if (formData.Count == 0)
-                return ApiResponse<Card>.Fail("No update parameters provided", "NO_PARAMS");
-
-            var url = BuildUrl($"/cards/{cardId}");
-            var content = new FormUrlEncodedContent(formData);
-            var response = await SendAsync(HttpMethod.Put, url, content);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var card = JsonSerializer.Deserialize<Card>(responseContent);
-            return card != null
-                ? ApiResponse<Card>.Success(card)
-                : ApiResponse<Card>.Fail("Failed to update card", "UPDATE_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Card>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Card>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Card>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Card>> MoveCardAsync(string cardId, string listId)
-    {
-        return await UpdateCardAsync(cardId, listId: listId);
-    }
-
-    public async Task<ApiResponse<bool>> DeleteCardAsync(string cardId)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}");
-            var response = await SendAsync(HttpMethod.Delete, url);
+            var response = await SendAsync(method, url, content);
             response.EnsureSuccessStatusCode();
             return ApiResponse<bool>.Success(true);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<bool>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
+        }, notFoundMessage);
 
-    // Comment operations
-    public async Task<ApiResponse<List<Comment>>> GetCommentsAsync(string cardId)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/actions", "filter=commentCard");
-            var response = await GetStringAsync(url);
-            var comments = JsonSerializer.Deserialize<List<Comment>>(response) ?? new();
-            return ApiResponse<List<Comment>>.Success(comments);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<List<Comment>>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<List<Comment>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<List<Comment>>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Comment>> AddCommentAsync(string cardId, string text)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/actions/comments", $"text={Uri.EscapeDataString(text)}");
-            var response = await SendAsync(HttpMethod.Post, url);
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-            var comment = JsonSerializer.Deserialize<Comment>(content);
-            return comment != null
-                ? ApiResponse<Comment>.Success(comment)
-                : ApiResponse<Comment>.Fail("Failed to add comment", "CREATE_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Comment>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Comment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Comment>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    // Label operations
-    public async Task<ApiResponse<List<Label>>> GetLabelsAsync(string boardId)
-    {
-        try
-        {
-            var url = BuildUrl($"/boards/{boardId}/labels", "limit=1000");
-            var response = await GetStringAsync(url);
-            var labels = JsonSerializer.Deserialize<List<Label>>(response) ?? new();
-            return ApiResponse<List<Label>>.Success(labels);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<List<Label>>.Fail("Board not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<List<Label>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<List<Label>>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Label>> CreateLabelAsync(string boardId, string name, string? color)
-    {
-        try
-        {
-            var url = BuildUrl("/labels");
-            var formData = new Dictionary<string, string>
-            {
-                ["idBoard"] = boardId,
-                ["name"] = name,
-                ["color"] = string.IsNullOrEmpty(color) ? "" : color
-            };
-            var content = new FormUrlEncodedContent(formData);
-            var response = await SendAsync(HttpMethod.Post, url, content);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var label = JsonSerializer.Deserialize<Label>(responseContent);
-            return label != null
-                ? ApiResponse<Label>.Success(label)
-                : ApiResponse<Label>.Fail("Failed to create label", "CREATE_FAILED");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Label>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Label>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Label>> UpdateLabelAsync(string labelId, string? name, string? color)
-    {
-        try
-        {
-            var formData = new Dictionary<string, string>();
-            if (!string.IsNullOrEmpty(name))
-                formData["name"] = name;
-            if (color != null)
-                formData["color"] = color;
-
-            if (formData.Count == 0)
-                return ApiResponse<Label>.Fail("No update parameters provided", "NO_PARAMS");
-
-            var url = BuildUrl($"/labels/{labelId}");
-            var content = new FormUrlEncodedContent(formData);
-            var response = await SendAsync(HttpMethod.Put, url, content);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var label = JsonSerializer.Deserialize<Label>(responseContent);
-            return label != null
-                ? ApiResponse<Label>.Success(label)
-                : ApiResponse<Label>.Fail("Failed to update label", "UPDATE_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Label>.Fail("Label not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Label>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Label>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<bool>> DeleteLabelAsync(string labelId)
-    {
-        try
-        {
-            var url = BuildUrl($"/labels/{labelId}");
-            var response = await SendAsync(HttpMethod.Delete, url);
-            response.EnsureSuccessStatusCode();
-            return ApiResponse<bool>.Success(true);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<bool>.Fail("Label not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    // Auth check
+    // Auth check keeps its own handling: it is the only endpoint that maps 401 to a distinct
+    // code, and it projects a fixed shape rather than deserializing a model.
     public async Task<ApiResponse<object>> CheckAuthAsync()
     {
         try
@@ -564,318 +173,6 @@ public partial class TrelloApiService : IAuthenticationChecker
         catch (Exception)
         {
             return ApiResponse<object>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    // Attachment operations
-    public async Task<ApiResponse<List<Attachment>>> GetAttachmentsAsync(string cardId)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/attachments");
-            var response = await GetStringAsync(url);
-            var attachments = JsonSerializer.Deserialize<List<Attachment>>(response) ?? new();
-            return ApiResponse<List<Attachment>>.Success(attachments);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<List<Attachment>>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<List<Attachment>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<List<Attachment>>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Attachment>> GetAttachmentAsync(string cardId, string attachmentId)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/attachments/{attachmentId}");
-            var response = await GetStringAsync(url);
-            var attachment = JsonSerializer.Deserialize<Attachment>(response);
-            return attachment != null
-                ? ApiResponse<Attachment>.Success(attachment)
-                : ApiResponse<Attachment>.Fail("Attachment not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Attachment>.Fail("Attachment not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Attachment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Attachment>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Attachment>> UploadAttachmentAsync(string cardId, string filePath, string? name = null)
-    {
-        try
-        {
-            if (!File.Exists(filePath))
-                return ApiResponse<Attachment>.Fail($"File not found: {filePath}", "FILE_NOT_FOUND");
-
-            var url = BuildUrl($"/cards/{cardId}/attachments");
-
-            using var content = new MultipartFormDataContent();
-            using var fileStream = File.OpenRead(filePath);
-            var streamContent = new StreamContent(fileStream);
-
-            var fileName = name ?? Path.GetFileName(filePath);
-            streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
-                GetMimeType(filePath));
-
-            content.Add(streamContent, "file", fileName);
-
-            if (!string.IsNullOrEmpty(name))
-                content.Add(new StringContent(name), "name");
-
-            var response = await SendAsync(HttpMethod.Post, url, content);
-            response.EnsureSuccessStatusCode();
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var attachment = JsonSerializer.Deserialize<Attachment>(responseContent);
-
-            return attachment != null
-                ? ApiResponse<Attachment>.Success(attachment)
-                : ApiResponse<Attachment>.Fail("Failed to upload attachment", "UPLOAD_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Attachment>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Attachment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Attachment>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Attachment>> AttachUrlAsync(string cardId, string attachUrl, string? name = null)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/attachments");
-
-            var formData = new Dictionary<string, string>
-            {
-                ["url"] = attachUrl
-            };
-            if (!string.IsNullOrEmpty(name))
-                formData["name"] = name;
-
-            var content = new FormUrlEncodedContent(formData);
-            var response = await SendAsync(HttpMethod.Post, url, content);
-            response.EnsureSuccessStatusCode();
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var attachment = JsonSerializer.Deserialize<Attachment>(responseContent);
-
-            return attachment != null
-                ? ApiResponse<Attachment>.Success(attachment)
-                : ApiResponse<Attachment>.Fail("Failed to attach URL", "ATTACH_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Attachment>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Attachment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Attachment>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<bool>> DeleteAttachmentAsync(string cardId, string attachmentId)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/attachments/{attachmentId}");
-            var response = await SendAsync(HttpMethod.Delete, url);
-            response.EnsureSuccessStatusCode();
-            return ApiResponse<bool>.Success(true);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<bool>.Fail("Attachment not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    // Checklist operations
-    public async Task<ApiResponse<List<Checklist>>> GetChecklistsAsync(string cardId)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/checklists");
-            var response = await GetStringAsync(url);
-            var checklists = JsonSerializer.Deserialize<List<Checklist>>(response) ?? new();
-            return ApiResponse<List<Checklist>>.Success(checklists);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<List<Checklist>>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<List<Checklist>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<List<Checklist>>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<Checklist>> CreateChecklistAsync(string cardId, string name)
-    {
-        try
-        {
-            var url = BuildUrl("/checklists", $"idCard={cardId}&name={Uri.EscapeDataString(name)}");
-            var response = await SendAsync(HttpMethod.Post, url);
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-            var checklist = JsonSerializer.Deserialize<Checklist>(content);
-            return checklist != null
-                ? ApiResponse<Checklist>.Success(checklist)
-                : ApiResponse<Checklist>.Fail("Failed to create checklist", "CREATE_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<Checklist>.Fail("Card not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<Checklist>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<Checklist>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<bool>> DeleteChecklistAsync(string checklistId)
-    {
-        try
-        {
-            var url = BuildUrl($"/checklists/{checklistId}");
-            var response = await SendAsync(HttpMethod.Delete, url);
-            response.EnsureSuccessStatusCode();
-            return ApiResponse<bool>.Success(true);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<bool>.Fail("Checklist not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<ChecklistItem>> AddChecklistItemAsync(string checklistId, string name)
-    {
-        try
-        {
-            var url = BuildUrl($"/checklists/{checklistId}/checkItems", $"name={Uri.EscapeDataString(name)}");
-            var response = await SendAsync(HttpMethod.Post, url);
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-            var item = JsonSerializer.Deserialize<ChecklistItem>(content);
-            return item != null
-                ? ApiResponse<ChecklistItem>.Success(item)
-                : ApiResponse<ChecklistItem>.Fail("Failed to add checklist item", "CREATE_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<ChecklistItem>.Fail("Checklist not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<ChecklistItem>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<ChecklistItem>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<ChecklistItem>> UpdateChecklistItemAsync(string cardId, string checkItemId, string state)
-    {
-        try
-        {
-            var url = BuildUrl($"/cards/{cardId}/checkItem/{checkItemId}");
-            var formData = new Dictionary<string, string>
-            {
-                ["state"] = state
-            };
-            var content = new FormUrlEncodedContent(formData);
-            var response = await SendAsync(HttpMethod.Put, url, content);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var item = JsonSerializer.Deserialize<ChecklistItem>(responseContent);
-            return item != null
-                ? ApiResponse<ChecklistItem>.Success(item)
-                : ApiResponse<ChecklistItem>.Fail("Failed to update checklist item", "UPDATE_FAILED");
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<ChecklistItem>.Fail("Card or checklist item not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<ChecklistItem>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<ChecklistItem>.Fail(UnexpectedErrorMessage, "ERROR");
-        }
-    }
-
-    public async Task<ApiResponse<bool>> DeleteChecklistItemAsync(string checklistId, string checkItemId)
-    {
-        try
-        {
-            var url = BuildUrl($"/checklists/{checklistId}/checkItems/{checkItemId}");
-            var response = await SendAsync(HttpMethod.Delete, url);
-            response.EnsureSuccessStatusCode();
-            return ApiResponse<bool>.Success(true);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return ApiResponse<bool>.Fail("Checklist or item not found", "NOT_FOUND");
-        }
-        catch (HttpRequestException exception)
-        {
-            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
-        }
-        catch (Exception)
-        {
-            return ApiResponse<bool>.Fail(UnexpectedErrorMessage, "ERROR");
         }
     }
 
