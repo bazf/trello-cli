@@ -22,6 +22,8 @@ public static class CommandCatalog
         public const string Comment = "Comment";
         public const string Member = "Member";
         public const string Search = "Search";
+        public const string Workspace = "Workspace";
+        public const string CustomField = "Custom field";
         public const string Label = "Label";
         public const string Attachment = "Attachment";
         public const string Checklist = "Checklist";
@@ -40,7 +42,9 @@ public static class CommandCatalog
         Groups.Search,
         Groups.Label,
         Groups.Attachment,
-        Groups.Checklist
+        Groups.Checklist,
+        Groups.CustomField,
+        Groups.Workspace
     ];
 
     public static IReadOnlyList<CommandDefinition> Commands { get; } = BuildCommands();
@@ -180,13 +184,14 @@ public static class CommandCatalog
         ]),
         new("Not supported (no command exists)",
         [
-            "Boards are read-only: they cannot be created, renamed, closed or deleted.",
+            "Boards cannot be deleted. Closing one with --close-board is the reversible equivalent, and deletion is deliberately left out because it destroys every list and card on the board.",
             "Lists cannot be deleted. Archiving one with --archive-list is the closest equivalent and is reversible.",
             "Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; --download-attachment returns its URL so you can retrieve it yourself.",
             "--move-card cannot move a card to a different board; --copy-card can copy one across.",
-            "No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.",
+            "Workspaces can be read but not created or changed. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.",
             "Only comments written by the token’s own account can be edited or deleted.",
-            "Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.",
+            "Custom field values can be read and set, but the fields themselves cannot be created or deleted.",
+            "Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.",
             "Except for --bulk-move-lists there is no batching: one command performs one operation."
         ]),
         new("What the read commands return",
@@ -323,6 +328,46 @@ public static class CommandCatalog
             Arguments: [new("board-id", "Board ID or the short link from the board URL.")],
             Examples: [$"{ToolName} --get-board 5f2c3d4e5f6a7b8c9d0e1f2a"],
             Notes: ["Boards are read-only in this CLI; there is no create, rename or delete."]),
+
+        new("--create-board", Groups.Board, "Create a board.",
+            Arguments: [new("name", "Board name.")],
+            Options:
+            [
+                new("--desc", "text", "Board description."),
+                new("--org", "workspace-id", "Workspace to create it in; see --get-organizations."),
+                new("--default-lists", "true|false", "Create Trello's To Do / Doing / Done lists; defaults to true."),
+                new("--permission-level", "private|org|public", "Who can see the board.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --create-board \"Q3 planning\"",
+                $"{ToolName} --create-board \"Q3 planning\" --org 5f2c...1f2a --default-lists false"
+            ],
+            Notes: ["Trello creates To Do, Doing and Done unless --default-lists false says otherwise."]),
+
+        new("--update-board", Groups.Board, "Rename or describe a board.",
+            Arguments: [new("board-id", "Board to change.")],
+            Options:
+            [
+                new("--name", "text", "New board name."),
+                new("--desc", "text", "New description; pass \"\" to clear it."),
+                new("--permission-level", "private|org|public", "Who can see the board.")
+            ],
+            Examples: [$"{ToolName} --update-board 5f2c...1f2a --name \"Q4 planning\""],
+            Notes: ["At least one option is required; without one the command returns NO_PARAMS."]),
+
+        new("--close-board", Groups.Board, "Close a board.",
+            Arguments: [new("board-id", "Board to close.")],
+            Examples: [$"{ToolName} --close-board 5f2c...1f2a"],
+            Notes:
+            [
+                "Reversible with --reopen-board, and the recoverable alternative to deleting a board.",
+                "A closed board is hidden from --get-boards unless you pass --filter closed or all."
+            ]),
+
+        new("--reopen-board", Groups.Board, "Reopen a closed board.",
+            Arguments: [new("board-id", "Board to reopen.")],
+            Examples: [$"{ToolName} --reopen-board 5f2c...1f2a"]),
 
         // List
         new("--get-lists", Groups.List, "Get the lists of a board.",
@@ -819,7 +864,64 @@ public static class CommandCatalog
             Arguments: [new("checklist-id", "Checklist holding the item."), new("item-id", "Item to delete.")],
             Examples: [$"{ToolName} --delete-checklist-item 5f2c...1f2a 5f2c...1f2b"],
             Notes: ["Cannot be undone."],
-            Destructive: true)
+            Destructive: true),
+
+        // Custom field
+        new("--get-custom-fields", Groups.CustomField, "List the custom fields defined on a board.",
+            Arguments: [new("board-id", "Board to read.")],
+            Examples: [$"{ToolName} --get-custom-fields 5f2c...1f2a"],
+            Notes:
+            [
+                "Each field carries its type: text, number, date, checkbox or list.",
+                "A list field also carries its options; those ids are what --set-custom-field --option takes."
+            ]),
+
+        new("--get-card-custom-fields", Groups.CustomField, "Read the custom field values set on a card.",
+            Arguments: [new("card-id", "Card to read.")],
+            Examples: [$"{ToolName} --get-card-custom-fields 5f2c...1f2a"],
+            Notes: ["Only fields with a value on this card appear; the shape of value depends on the field type."]),
+
+        new("--set-custom-field", Groups.CustomField, "Set a custom field on a card.",
+            Arguments: [new("card-id", "Card to change."), new("field-id", "Custom field to set.")],
+            Options:
+            [
+                new("--value", "text", "Value for a text, number, date or checkbox field."),
+                new("--option", "option-id", "Chosen option for a list field.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --set-custom-field 5f2c...1f2a 5f2c...1f2b --value \"In review\"",
+                $"{ToolName} --set-custom-field 5f2c...1f2a 5f2c...1f2b --option 5f2c...1f2e"
+            ],
+            Notes:
+            [
+                "Reads the field first to learn its type, so one --value works for text, number, date and checkbox fields; that costs an extra request.",
+                "A list field needs --option, not --value; --get-custom-fields lists the option ids.",
+                "Use true or false as the value of a checkbox field, and an ISO-8601 timestamp for a date field."
+            ]),
+
+        new("--clear-custom-field", Groups.CustomField, "Clear a custom field on a card.",
+            Arguments: [new("card-id", "Card to change."), new("field-id", "Custom field to clear.")],
+            Examples: [$"{ToolName} --clear-custom-field 5f2c...1f2a 5f2c...1f2b"],
+            Notes: ["Clears the value on this card; the field stays defined on the board."]),
+
+        // Workspace
+        new("--get-organizations", Groups.Workspace, "List the workspaces the member belongs to.",
+            Examples: [$"{ToolName} --get-organizations"],
+            Notes: ["Trello's API calls workspaces organizations, which is why these commands are named that way."]),
+
+        new("--get-organization", Groups.Workspace, "Get one workspace.",
+            Arguments: [new("workspace-id", "Workspace id or name.")],
+            Examples: [$"{ToolName} --get-organization 5f2c...1f2a"]),
+
+        new("--get-organization-boards", Groups.Workspace, "List the boards in a workspace.",
+            Arguments: [new("workspace-id", "Workspace id or name.")],
+            Examples: [$"{ToolName} --get-organization-boards 5f2c...1f2a"],
+            Notes: ["Narrower than --get-boards, which spans every board the member can see."]),
+
+        new("--get-organization-members", Groups.Workspace, "List the members of a workspace.",
+            Arguments: [new("workspace-id", "Workspace id or name.")],
+            Examples: [$"{ToolName} --get-organization-members 5f2c...1f2a"])
     ];
 }
 

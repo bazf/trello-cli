@@ -19,6 +19,8 @@ public sealed class CommandDispatcher : ICommandDispatcher
         var labels = new LabelCommands(api, output);
         var members = new MemberCommands(api, output);
         var search = new SearchCommands(api, output);
+        var organizations = new OrganizationCommands(api, output);
+        var customFields = new CustomFieldCommands(api, output);
         _output = output;
 
         // Keys must match CommandCatalog.DispatchedCommands; a test asserts both directions.
@@ -26,6 +28,34 @@ public sealed class CommandDispatcher : ICommandDispatcher
         {
             ["--get-boards"] = args => board.GetBoardsAsync(GetNamedArg(args, "--filter")),
             ["--get-board"] = args => board.GetBoardAsync(GetArg(args, 1)),
+
+            ["--create-board"] = args => board.CreateBoardAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--desc"),
+                GetNamedArg(args, "--org"),
+                GetNamedArg(args, "--default-lists"),
+                GetNamedArg(args, "--permission-level")),
+            ["--update-board"] = args => board.UpdateBoardAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--name"),
+                GetNamedArg(args, "--desc"),
+                GetNamedArg(args, "--permission-level")),
+            ["--close-board"] = args => board.CloseBoardAsync(GetArg(args, 1)),
+            ["--reopen-board"] = args => board.ReopenBoardAsync(GetArg(args, 1)),
+
+            ["--get-organizations"] = _ => organizations.GetOrganizationsAsync(),
+            ["--get-organization"] = args => organizations.GetOrganizationAsync(GetArg(args, 1)),
+            ["--get-organization-boards"] = args => organizations.GetOrganizationBoardsAsync(GetArg(args, 1)),
+            ["--get-organization-members"] = args => organizations.GetOrganizationMembersAsync(GetArg(args, 1)),
+
+            ["--get-custom-fields"] = args => customFields.GetCustomFieldsAsync(GetArg(args, 1)),
+            ["--get-card-custom-fields"] = args => customFields.GetCardCustomFieldsAsync(GetArg(args, 1)),
+            ["--set-custom-field"] = args => customFields.SetCustomFieldAsync(
+                GetArg(args, 1),
+                GetArg(args, 2),
+                GetNamedArg(args, "--value"),
+                GetNamedArg(args, "--option")),
+            ["--clear-custom-field"] = args => customFields.ClearCustomFieldAsync(GetArg(args, 1), GetArg(args, 2)),
 
             ["--get-lists"] = args => lists.GetListsAsync(GetArg(args, 1), GetNamedArg(args, "--filter")),
             ["--create-list"] = args => lists.CreateListAsync(GetArg(args, 1), GetArg(args, 2)),

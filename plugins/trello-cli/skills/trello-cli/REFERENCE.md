@@ -117,6 +117,26 @@ trello-cli --get-board <board-id>
 # Returns: {"ok":true,"data":{"id":"...","name":"...","desc":"...","url":"..."}}
 ```
 
+#### Creating and Closing Boards
+
+```bash
+# Create a board; Trello adds To Do / Doing / Done unless told otherwise
+trello-cli --create-board "Q3 planning"
+trello-cli --create-board "Q3 planning" --org <workspace-id> --default-lists false --permission-level org
+
+# Rename or describe one
+trello-cli --update-board <board-id> --name "Q4 planning" --desc "Rolling quarter"
+
+# Close and reopen; this is the reversible alternative to deleting a board
+trello-cli --close-board <board-id>
+trello-cli --reopen-board <board-id>
+```
+
+Boards cannot be deleted through this CLI. Deletion destroys every list and card on
+the board and there is no confirmation step in a flag-driven interface, so
+`--close-board` is offered instead. A closed board is hidden from `--get-boards`
+unless you pass `--filter closed` or `--filter all`.
+
 ### List Operations
 
 ```bash
@@ -567,6 +587,50 @@ trello-cli --delete-checklist-item <checklist-id> <item-id>
 
 ---
 
+### Custom Field Operations
+
+```bash
+# What the board defines: each field's type, and the options of any list field
+trello-cli --get-custom-fields <board-id>
+# Returns: {"ok":true,"data":[{"id":"...","name":"Stage","type":"list","options":[{"id":"...","value":{"text":"In review"}}]}]}
+
+# What one card has set
+trello-cli --get-card-custom-fields <card-id>
+
+# Set a value. The field is read first to learn its type, so the same --value
+# works for text, number, date and checkbox fields.
+trello-cli --set-custom-field <card-id> <field-id> --value "In review"
+trello-cli --set-custom-field <card-id> <field-id> --value true          # checkbox
+trello-cli --set-custom-field <card-id> <field-id> --value 2026-03-01    # date
+
+# A list field takes an option ID, not a value
+trello-cli --set-custom-field <card-id> <field-id> --option <option-id>
+
+# Clear the value on this card; the field stays defined on the board
+trello-cli --clear-custom-field <card-id> <field-id>
+```
+
+Passing `--value` to a list field returns `INVALID_PARAM` naming the field, because
+Trello stores the chosen option by ID rather than by text. The fields themselves
+cannot be created or deleted here.
+
+### Workspace Operations
+
+Trello's API calls workspaces organizations, which is where these command names come
+from.
+
+```bash
+trello-cli --get-organizations
+# Returns: {"ok":true,"data":[{"id":"...","name":"acme","displayName":"Acme Inc"}]}
+
+trello-cli --get-organization <workspace-id>
+trello-cli --get-organization-boards <workspace-id>
+trello-cli --get-organization-members <workspace-id>
+```
+
+`--get-organization-boards` is narrower than `--get-boards`, which spans every board
+the member can see rather than one workspace. Workspaces are read-only here.
+
 ## Common Workflows
 
 ### 1. First Time Setup
@@ -691,13 +755,14 @@ Also printed by `trello-cli --help` and returned under `data.restrictions` by
 
 **Not supported (no command exists)**
 
-- Boards are read-only: they cannot be created, renamed, closed or deleted.
+- Boards cannot be deleted. Closing one with `--close-board` is the reversible equivalent, and deletion is deliberately left out because it destroys every list and card on the board.
 - Lists cannot be deleted. Archiving one with `--archive-list` is the closest equivalent and is reversible.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
 - `--move-card` cannot move a card to a different board; `--copy-card` can copy one across.
-- No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
+- Workspaces can be read but not created or changed. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
 - Only comments written by the token's own account can be edited or deleted.
-- Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
+- Custom field values can be read and set, but the fields themselves cannot be created or deleted.
+- Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
 - Except for `--bulk-move-lists` there is no batching: one command performs one operation.
 
 **What the read commands return**

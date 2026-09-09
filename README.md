@@ -221,6 +221,10 @@ run those for the authoritative, always-current version.
 | `--clear-auth` | Remove persisted credentials. |
 | `--get-boards` | List the open boards of the authenticated member. |
 | `--get-board <board-id>` | Get one board. |
+| `--create-board <name> [--desc <text>] [--org <workspace-id>] [--default-lists <true\|false>] [--permission-level <level>]` | Create a board. |
+| `--update-board <board-id> [--name <text>] [--desc <text>] [--permission-level <level>]` | Rename or describe a board. |
+| `--close-board <board-id>` | Close a board. Reversible. |
+| `--reopen-board <board-id>` | Reopen a closed board. |
 | `--get-lists <board-id> [--filter <open\|closed\|all>]` | Get the open lists of a board. |
 | `--create-list <board-id> <name>` | Create a list on a board. |
 | `--move-list <list-id> <pos>` | Reposition a list on its board. |
@@ -281,6 +285,14 @@ run those for the authoritative, always-current version.
 | `--rename-checklist-item <card-id> <item-id> --name <text>` | Rename an item in a checklist. |
 | `--move-checklist-item <card-id> <item-id> --pos <pos>` | Reorder an item within its checklist. |
 | `--delete-checklist-item <checklist-id> <item-id>` | Delete an item from a checklist. **Irreversible.** |
+| `--get-custom-fields <board-id>` | List the custom fields defined on a board. |
+| `--get-card-custom-fields <card-id>` | Read the custom field values set on a card. |
+| `--set-custom-field <card-id> <field-id> [--value <text>] [--option <option-id>]` | Set a custom field on a card. |
+| `--clear-custom-field <card-id> <field-id>` | Clear a custom field on a card. |
+| `--get-organizations` | List the workspaces the member belongs to. |
+| `--get-organization <workspace-id>` | Get one workspace. |
+| `--get-organization-boards <workspace-id>` | List the boards in a workspace. |
+| `--get-organization-members <workspace-id>` | List the members of a workspace. |
 
 Notes worth knowing up front:
 
@@ -311,13 +323,14 @@ The same list is printed by `trello-cli --help` and returned by
 
 **Not supported (no command exists)**
 
-- Boards are read-only: they cannot be created, renamed, closed or deleted.
+- Boards cannot be deleted. Closing one with `--close-board` is the reversible equivalent, and deletion is deliberately left out because it destroys every list and card on the board.
 - Lists cannot be deleted. Archiving one with `--archive-list` is the closest equivalent and is reversible.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
 - `--move-card` cannot move a card to a different board; `--copy-card` can copy one across.
-- No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
+- Workspaces can be read but not created or changed. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
 - Only comments written by the token's own account can be edited or deleted.
-- Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
+- Custom field values can be read and set, but the fields themselves cannot be created or deleted.
+- Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
 - Except for `--bulk-move-lists` there is no batching: one command performs one operation.
 
 **What the read commands return**

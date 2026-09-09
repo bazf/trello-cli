@@ -24,6 +24,10 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--clear-auth` | Remove persisted credentials. `--clear-auth` |
 | `--get-boards` | List the open boards of the authenticated member. `--get-boards` |
 | `--get-board` | Get one board. `--get-board <board-id>` |
+| `--create-board` | Create a board. `--create-board <name> [--desc <text>] [--org <workspace-id>] [--default-lists <true\|false>] [--permission-level <level>]` |
+| `--update-board` | Rename or describe a board. `--update-board <board-id> [--name <text>] [--desc <text>] [--permission-level <level>]` |
+| `--close-board` | Close a board (reversible). `--close-board <board-id>` |
+| `--reopen-board` | Reopen a closed board. `--reopen-board <board-id>` |
 | `--get-lists` | Get the open lists of a board. `--get-lists <board-id>` |
 | `--create-list` | Create a list on a board. `--create-list <board-id> <name>` |
 | `--move-list` | Reposition a list on its board. `--move-list <list-id> <pos>` |
@@ -71,6 +75,14 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--create-label` | Create a label on a board. `--create-label <board-id> <name> [--color <color>]` |
 | `--update-label` | Rename or recolor a label. `--update-label <label-id> [--name <text>] [--color <color>]` |
 | `--delete-label` | Delete a label. `--delete-label <label-id>` |
+| `--get-custom-fields` | List a board's custom fields. `--get-custom-fields <board-id>` |
+| `--get-card-custom-fields` | Read a card's custom field values. `--get-card-custom-fields <card-id>` |
+| `--set-custom-field` | Set a custom field on a card. `--set-custom-field <card-id> <field-id> [--value <text>] [--option <option-id>]` |
+| `--clear-custom-field` | Clear a custom field on a card. `--clear-custom-field <card-id> <field-id>` |
+| `--get-organizations` | List your workspaces. `--get-organizations` |
+| `--get-organization` | Get one workspace. `--get-organization <workspace-id>` |
+| `--get-organization-boards` | Boards in a workspace. `--get-organization-boards <workspace-id>` |
+| `--get-organization-members` | Members of a workspace. `--get-organization-members <workspace-id>` |
 | `--list-attachments` | List the attachments on a card. `--list-attachments <card-id>` |
 | `--upload-attachment` | Upload a local file to a card. `--upload-attachment <card-id> <file-path> [--name <text>]` |
 | `--attach-url` | Attach a URL to a card. `--attach-url <card-id> <url> [--name <text>]` |

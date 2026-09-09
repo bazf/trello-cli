@@ -51,6 +51,10 @@ revoke the Trello token or unset environment variables.
 ```bash
 trello-cli --get-boards                              # List all open boards
 trello-cli --get-board <board-id>                    # Get one board
+trello-cli --create-board "<name>" --org <workspace-id>
+trello-cli --update-board <board-id> --name "<name>"
+trello-cli --close-board <board-id>                  # Reversible; no board deletion
+trello-cli --reopen-board <board-id>
 trello-cli --get-lists <board-id>                    # Get open lists in board
 trello-cli --create-list <board-id> "<name>"         # Create list
 trello-cli --move-list <list-id> <top|bottom|number> # Reposition a list
@@ -154,6 +158,20 @@ trello-cli --update-checklist-item <card-id> <item-id> <state>  # complete/incom
 trello-cli --delete-checklist-item <checklist-id> <item-id>     # Delete item
 ```
 
+### Custom Fields & Workspaces
+
+```bash
+trello-cli --get-custom-fields <board-id>            # Types, and options for list fields
+trello-cli --get-card-custom-fields <card-id>        # What this card has set
+trello-cli --set-custom-field <card-id> <field-id> --value "<value>"
+trello-cli --set-custom-field <card-id> <field-id> --option <option-id>   # list fields
+trello-cli --clear-custom-field <card-id> <field-id>
+trello-cli --get-organizations                       # Workspaces
+trello-cli --get-organization <workspace-id>
+trello-cli --get-organization-boards <workspace-id>
+trello-cli --get-organization-members <workspace-id>
+```
+
 ## Typical Workflows
 
 ### List All Tasks
@@ -179,12 +197,14 @@ trello-cli --move-card <card-id> <done-list-id>
 
 What this CLI cannot do, so you do not plan around it:
 
-- Boards are read-only: no create, rename, close or delete.
+- Boards cannot be deleted; `--close-board` is the reversible equivalent.
 - Lists cannot be deleted; `--archive-list` is the reversible equivalent.
 - `--move-card` cannot cross boards; `--copy-card` can.
 - Only Trello-hosted attachments download; link attachments return their URL instead.
 - Only comments this account wrote can be edited or deleted.
-- Members can be read and assigned to cards, but not invited, removed from a board, or given a role. Workspaces, custom fields, power-ups and webhooks are out of scope.
+- Members can be read and assigned to cards, but not invited, removed from a board, or given a role.
+- Workspaces are readable but not editable. Custom field values can be set, but the fields themselves cannot be created or deleted.
+- Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
 - `--get-boards`, `--get-lists` and `--get-all-cards` return open items unless you pass `--filter closed` or `--filter all`.
 - `--labels` and `--members` replace the whole set on the card; pass `""` to clear. Use `--add-card-label` / `--add-card-member` to change one and leave the rest.
 - `--update-checklist-item` takes a **card** ID; `--add-checklist-item` and `--delete-checklist-item` take a **checklist** ID.

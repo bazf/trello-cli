@@ -66,6 +66,16 @@ variables.
 # List all boards
 trello-cli --get-boards
 
+# Create a board; Trello adds To Do / Doing / Done unless told otherwise
+trello-cli --create-board "<name>" --desc "<desc>" --org <workspace-id> --default-lists false
+
+# Rename or describe a board
+trello-cli --update-board <board-id> --name "<name>" --desc "<desc>"
+
+# Close a board; reversible, and the alternative to deleting one
+trello-cli --close-board <board-id>
+trello-cli --reopen-board <board-id>
+
 # Get specific board
 trello-cli --get-board <board-id>
 ```
@@ -259,6 +269,37 @@ storage without ever sending your credentials there. Attachments Trello does not
 links: they return `LINK_ATTACHMENT` with the URL, and `--download-all-attachments` lists
 them under `data.skipped` rather than fetching them for you.
 
+### Custom Field Operations
+
+```bash
+# What fields exist on the board, with their type and (for list fields) their options
+trello-cli --get-custom-fields <board-id>
+
+# What this card has set
+trello-cli --get-card-custom-fields <card-id>
+
+# Set a value; the field's type is looked up, so one --value covers
+# text, number, date and checkbox fields
+trello-cli --set-custom-field <card-id> <field-id> --value "<value>"
+
+# A list field takes an option ID from --get-custom-fields instead
+trello-cli --set-custom-field <card-id> <field-id> --option <option-id>
+
+# Clear the value on this card; the field stays defined on the board
+trello-cli --clear-custom-field <card-id> <field-id>
+```
+
+### Workspace Operations
+
+Trello's API calls workspaces organizations, hence the command names.
+
+```bash
+trello-cli --get-organizations
+trello-cli --get-organization <workspace-id>
+trello-cli --get-organization-boards <workspace-id>
+trello-cli --get-organization-members <workspace-id>
+```
+
 ### Checklist Operations
 
 ```bash
@@ -374,13 +415,14 @@ Printed by `trello-cli --help` and returned by `trello-cli --commands` under
 
 **Not supported (no command exists)**
 
-- Boards are read-only: they cannot be created, renamed, closed or deleted.
+- Boards cannot be deleted. Closing one with `--close-board` is the reversible equivalent, and deletion is deliberately left out because it destroys every list and card on the board.
 - Lists cannot be deleted. Archiving one with `--archive-list` is the closest equivalent and is reversible.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
 - `--move-card` cannot move a card to a different board; `--copy-card` can copy one across.
-- No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
+- Workspaces can be read but not created or changed. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
 - Only comments written by the token's own account can be edited or deleted.
-- Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
+- Custom field values can be read and set, but the fields themselves cannot be created or deleted.
+- Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
 - Except for `--bulk-move-lists` there is no batching: one command performs one operation.
 
 **What the read commands return**

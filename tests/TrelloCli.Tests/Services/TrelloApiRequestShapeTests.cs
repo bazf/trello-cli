@@ -279,6 +279,156 @@ public class TrelloApiRequestShapeTests
         Assert.All(handler.Requests, request => Assert.Equal(expected, request.Query));
     }
 
+    [Fact]
+    public async Task CreateBoardSendsThePreferenceInTheFlatFormTrelloWantsOnCreate()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.CreateBoardAsync("Q3", desc: null, organizationId: "org-1", defaultLists: false, permissionLevel: "org");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("/1/boards", request.Path);
+        Assert.Contains("idOrganization=org-1", request.Content);
+        Assert.Contains("defaultLists=false", request.Content);
+        Assert.Contains("prefs_permissionLevel=org", request.Content);
+    }
+
+    [Fact]
+    public async Task UpdateBoardSendsThePreferenceInTheNestedFormTrelloWantsOnUpdate()
+    {
+        // Creating takes prefs_permissionLevel; updating takes prefs/permissionLevel.
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.UpdateBoardAsync("board-1", name: null, desc: null, permissionLevel: "private");
+
+        var content = Uri.UnescapeDataString(Assert.Single(handler.Requests).Content);
+        Assert.Contains("prefs/permissionLevel=private", content);
+    }
+
+    [Fact]
+    public async Task CloseBoardPutsTheClosedFlag()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.SetBoardClosedAsync("board-1", closed: true);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("/1/boards/board-1/closed", request.Path);
+        Assert.Equal("value=true", request.Content);
+    }
+
+    [Fact]
+    public async Task SetCustomFieldLooksUpTheFieldTypeAndWrapsTheValueUnderIt()
+    {
+        var handler = new RoutingHandler(request =>
+            request.RequestUri!.AbsolutePath == "/1/customFields/field-1"
+                ? """{"id":"field-1","name":"Estimate","type":"number"}"""
+                : "{}");
+        var service = await CreateWithHandlerAsync(handler);
+
+        await service.SetCustomFieldAsync("card-1", "field-1", value: "5", optionId: null);
+
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("/1/customFields/field-1", handler.Requests[0].Path);
+
+        var write = handler.Requests[1];
+        Assert.Equal(HttpMethod.Put, write.Method);
+        Assert.Equal("/1/cards/card-1/customField/field-1/item", write.Path);
+        // A number field wants {"value":{"number":"5"}}, not {"value":{"text":"5"}}.
+        Assert.Equal("""{"value":{"number":"5"}}""", write.Content);
+    }
+
+    [Fact]
+    public async Task SetCustomFieldWithAnOptionSkipsTheLookupAndSendsIdValue()
+    {
+        var handler = new RoutingHandler(_ => "{}");
+        var service = await CreateWithHandlerAsync(handler);
+
+        await service.SetCustomFieldAsync("card-1", "field-1", value: null, optionId: "option-9");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("""{"idValue":"option-9"}""", request.Content);
+    }
+
+    [Fact]
+    public async Task SetCustomFieldRejectsAPlainValueForAListField()
+    {
+        var handler = new RoutingHandler(_ => """{"id":"field-1","name":"Stage","type":"list"}""");
+        var service = await CreateWithHandlerAsync(handler);
+
+        var response = await service.SetCustomFieldAsync("card-1", "field-1", value: "In review", optionId: null);
+
+        Assert.False(response.Ok);
+        Assert.Equal("INVALID_PARAM", response.Code);
+        Assert.Contains("Stage", response.Error!, StringComparison.Ordinal);
+        // Only the lookup happened; nothing was written.
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task ClearCustomFieldUnsetsTheOptionForAListFieldAndTheValueOtherwise()
+    {
+        var listHandler = new RoutingHandler(request =>
+            request.RequestUri!.AbsolutePath == "/1/customFields/field-1"
+                ? """{"id":"field-1","type":"list"}"""
+                : "{}");
+        await (await CreateWithHandlerAsync(listHandler)).ClearCustomFieldAsync("card-1", "field-1");
+        Assert.Equal("""{"idValue":null}""", listHandler.Requests[1].Content);
+
+        var textHandler = new RoutingHandler(request =>
+            request.RequestUri!.AbsolutePath == "/1/customFields/field-1"
+                ? """{"id":"field-1","type":"text"}"""
+                : "{}");
+        await (await CreateWithHandlerAsync(textHandler)).ClearCustomFieldAsync("card-1", "field-1");
+        Assert.Equal("""{"value":""}""", textHandler.Requests[1].Content);
+    }
+
+    [Fact]
+    public async Task WorkspaceCommandsReadTheOrganizationEndpoints()
+    {
+        var (service, handler) = await CreateAsync("[]");
+
+        await service.GetOrganizationsAsync();
+        await service.GetOrganizationBoardsAsync("org-1");
+        await service.GetOrganizationMembersAsync("org-1");
+
+        Assert.Equal("/1/members/me/organizations", handler.Requests[0].Path);
+        Assert.Equal("/1/organizations/org-1/boards", handler.Requests[1].Path);
+        Assert.Equal("/1/organizations/org-1/members", handler.Requests[2].Path);
+    }
+
+    private static async Task<TrelloApiService> CreateWithHandlerAsync(RoutingHandler handler)
+    {
+        var config = new ConfigService(
+            new FixedTokenCredentialStore("token-canary"),
+            name => name == "TRELLO_API_KEY" ? "api-key-canary" : null,
+            Path.Combine(Path.GetTempPath(), $"trello-shape-{Guid.NewGuid():N}.json"),
+            _ => { });
+        await config.LoadAsync();
+        return new TrelloApiService(config, new HttpClient(handler));
+    }
+
+    private sealed class RoutingHandler(Func<HttpRequestMessage, string> route) : HttpMessageHandler
+    {
+        public List<RecordedRequest> Requests { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(new RecordedRequest(
+                request.Method,
+                request.RequestUri!.AbsolutePath,
+                request.RequestUri.Query.TrimStart('?'),
+                [],
+                request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken)));
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(route(request), Encoding.UTF8, "application/json")
+            };
+        }
+    }
+
     private static async Task<(TrelloApiService Service, RecordingHandler Handler)> CreateAsync(string body)
     {
         var handler = new RecordingHandler(body);

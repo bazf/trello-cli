@@ -147,6 +147,34 @@ public partial class TrelloApiService : IAuthenticationChecker
             return ApiResponse<List<T>>.Success(JsonSerializer.Deserialize<List<T>>(body) ?? new());
         }, notFoundMessage);
 
+    /// <summary>
+    /// Send a JSON body rather than a form. Only the custom-field setter needs this; every other
+    /// endpoint takes form fields. It still goes through SendAsync, so credentials are handled
+    /// in exactly one place.
+    /// </summary>
+    private Task<ApiResponse<T>> SendJsonAsync<T>(
+        HttpMethod method,
+        string url,
+        object body,
+        string failureMessage,
+        string failureCode,
+        string? notFoundMessage) where T : class =>
+        ExecuteAsync(async () =>
+        {
+            using var content = new StringContent(
+                JsonSerializer.Serialize(body),
+                System.Text.Encoding.UTF8,
+                "application/json");
+
+            var response = await SendAsync(method, url, content);
+            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadAsStringAsync();
+            var value = JsonSerializer.Deserialize<T>(responseBody);
+            return value is not null
+                ? ApiResponse<T>.Success(value)
+                : ApiResponse<T>.Fail(failureMessage, failureCode);
+        }, notFoundMessage);
+
     /// <summary>Send a request whose response body carries nothing worth reading.</summary>
     private Task<ApiResponse<bool>> SendForSuccessAsync(
         HttpMethod method,
