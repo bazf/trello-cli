@@ -19,7 +19,7 @@ public class CardCommands(TrelloApiService api, TextWriter output)
         Write(result);
     }
 
-    public async Task GetAllCardsAsync(string boardId)
+    public async Task GetAllCardsAsync(string boardId, string? filter = null)
     {
         if (string.IsNullOrEmpty(boardId))
         {
@@ -27,7 +27,7 @@ public class CardCommands(TrelloApiService api, TextWriter output)
             return;
         }
 
-        var result = await Api.GetCardsInBoardAsync(boardId);
+        var result = await Api.GetCardsInBoardAsync(boardId, filter);
         Write(result);
     }
 
@@ -226,5 +226,90 @@ public class CardCommands(TrelloApiService api, TextWriter output)
         }
 
         return true;
+    }
+
+    public async Task SetCardPositionAsync(string cardId, string position)
+    {
+        if (!Require(cardId, "Card ID required")) return;
+        if (!Require(position, "Position required (top, bottom or a number)")) return;
+
+        Write(await Api.SetCardPositionAsync(cardId, position));
+    }
+
+    public async Task SetDueCompleteAsync(string cardId, string state)
+    {
+        if (!Require(cardId, "Card ID required")) return;
+
+        bool? complete = state?.ToLowerInvariant() switch
+        {
+            "true" => true,
+            "false" => false,
+            _ => null
+        };
+
+        if (complete is null)
+        {
+            Write(ApiResponse<object>.Fail("State must be true or false", "INVALID_PARAM"));
+            return;
+        }
+
+        Write(await Api.SetDueCompleteAsync(cardId, complete.Value));
+    }
+
+    // An empty date is meaningful here: it clears the start date.
+    public async Task SetStartDateAsync(string cardId, string start)
+    {
+        if (!Require(cardId, "Card ID required")) return;
+
+        Write(await Api.SetStartDateAsync(cardId, start ?? string.Empty));
+    }
+
+    public async Task SetCardCoverAsync(string cardId, string? color, string? attachmentId, string? size, string? brightness)
+    {
+        if (!Require(cardId, "Card ID required")) return;
+
+        Write(await Api.SetCardCoverAsync(cardId, color, attachmentId, size, brightness));
+    }
+
+    public async Task ClearCardCoverAsync(string cardId)
+    {
+        if (!Require(cardId, "Card ID required")) return;
+
+        Write(await Api.ClearCardCoverAsync(cardId));
+    }
+
+    public async Task CopyCardAsync(string cardId, string targetListId, string? name, string? position, string? keep)
+    {
+        if (!Require(cardId, "Card ID required")) return;
+        if (!Require(targetListId, "Target list ID required")) return;
+
+        Write(await Api.CopyCardAsync(cardId, targetListId, name, position, keep));
+    }
+
+    public async Task GetCardActivityAsync(string cardId, string? limit, string? filter)
+    {
+        if (!Require(cardId, "Card ID required")) return;
+
+        int? parsed = null;
+        if (!string.IsNullOrEmpty(limit))
+        {
+            if (!int.TryParse(limit, out var value) || value <= 0)
+            {
+                Write(ApiResponse<object>.Fail("--limit must be a positive whole number", "INVALID_PARAM"));
+                return;
+            }
+
+            parsed = value;
+        }
+
+        Write(await Api.GetCardActivityAsync(cardId, parsed, filter));
+    }
+
+    private bool Require(string? value, string message)
+    {
+        if (!string.IsNullOrEmpty(value)) return true;
+
+        Write(ApiResponse<object>.Fail(message, "MISSING_PARAM"));
+        return false;
     }
 }

@@ -73,7 +73,7 @@ trello-cli --get-board <board-id>
 ### List Operations
 
 ```bash
-# Get all lists in a board (archived lists are not returned)
+# Get lists in a board; open only unless --filter says otherwise
 trello-cli --get-lists <board-id>
 
 # Create a new list
@@ -81,6 +81,17 @@ trello-cli --create-list <board-id> "<list-name>"
 
 # Reposition a list: top, bottom, or a number
 trello-cli --move-list <list-id> top
+
+# Rename or reposition a list
+trello-cli --update-list <list-id> --name "<new-name>" --pos <top|bottom|number>
+
+# Archive a list and its cards; reversible, and the cards come back with it
+trello-cli --archive-list <list-id>
+trello-cli --unarchive-list <list-id>
+
+# Empty a list without deleting it
+trello-cli --archive-all-cards <list-id>
+trello-cli --move-all-cards <source-list-id> <target-list-id>
 
 # Reposition several lists in one call (<list-id>:<pos> pairs)
 trello-cli --bulk-move-lists <list-id>:top <list-id>:bottom
@@ -120,6 +131,25 @@ trello-cli --move-card <card-id> <target-list-id>
 # Archive / restore a card (reversible; prefer this over deleting)
 trello-cli --archive-card <card-id>
 trello-cli --unarchive-card <card-id>
+
+# Copy a card, keeping everything on it by default; the target list may be on another board
+trello-cli --copy-card <card-id> <target-list-id> --name "<name>" --keep all
+
+# Reorder a card inside its list (--move-card changes list instead)
+trello-cli --set-card-position <card-id> <top|bottom|number>
+
+# Tick the due date, or set/clear a start date
+trello-cli --set-due-complete <card-id> true
+trello-cli --set-start-date <card-id> 2026-03-01
+trello-cli --set-start-date <card-id> ""
+
+# Card cover: a color, or an image already attached to the card
+trello-cli --set-card-cover <card-id> --color blue --size full
+trello-cli --set-card-cover <card-id> --attachment <attachment-id>
+trello-cli --clear-card-cover <card-id>
+
+# Who changed this card and when
+trello-cli --get-card-activity <card-id> --limit 20 --filter updateCard,commentCard
 
 # Delete a card permanently (cannot be undone)
 trello-cli --delete-card <card-id>
@@ -235,14 +265,17 @@ them under `data.skipped` rather than fetching them for you.
 # Get checklists and their items (the only source of checklist and item IDs)
 trello-cli --get-checklists <card-id>
 
-# Create and delete checklists
+# Create, rename and delete checklists
 trello-cli --create-checklist <card-id> "<checklist-name>"
+trello-cli --update-checklist <checklist-id> --name "<new-name>" --pos <top|bottom|number>
 trello-cli --delete-checklist <checklist-id>
 
 # Items: note that updating takes the CARD id, adding and deleting take the CHECKLIST id
 trello-cli --add-checklist-item <checklist-id> "<item-name>"
 trello-cli --update-checklist-item <card-id> <item-id> complete
 trello-cli --update-checklist-item <card-id> <item-id> incomplete
+trello-cli --rename-checklist-item <card-id> <item-id> --name "<new-text>"
+trello-cli --move-checklist-item <card-id> <item-id> --pos <top|bottom|number>
 trello-cli --delete-checklist-item <checklist-id> <item-id>
 ```
 
@@ -342,9 +375,9 @@ Printed by `trello-cli --help` and returned by `trello-cli --commands` under
 **Not supported (no command exists)**
 
 - Boards are read-only: they cannot be created, renamed, closed or deleted.
-- Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
+- Lists cannot be deleted. Archiving one with `--archive-list` is the closest equivalent and is reversible.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
-- Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
+- `--move-card` cannot move a card to a different board; `--copy-card` can copy one across.
 - No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
 - Only comments written by the token's own account can be edited or deleted.
 - Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
@@ -352,7 +385,7 @@ Printed by `trello-cli --help` and returned by `trello-cli --commands` under
 
 **What the read commands return**
 
-- `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; closed boards, archived lists and archived cards are omitted.
+- `--get-boards`, `--get-lists` and `--get-all-cards` return open items unless you pass `--filter closed` or `--filter all`.
 - An archived card is still readable with `--get-card` and can be restored with `--unarchive-card`.
 - `--get-labels` returns at most 1000 labels for a board.
 - Results are returned exactly as Trello sends them, unpaged; large boards produce large JSON documents.

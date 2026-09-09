@@ -30,13 +30,43 @@ public partial class TrelloApiService
 
     // Takes a card ID, unlike the add and delete item calls which take a checklist ID.
     public Task<ApiResponse<ChecklistItem>> UpdateChecklistItemAsync(string cardId, string checkItemId, string state) =>
+        PatchChecklistItemAsync(cardId, checkItemId, new Dictionary<string, string> { ["state"] = state });
+
+    public Task<ApiResponse<ChecklistItem>> RenameChecklistItemAsync(string cardId, string checkItemId, string name) =>
+        PatchChecklistItemAsync(cardId, checkItemId, new Dictionary<string, string> { ["name"] = name });
+
+    public Task<ApiResponse<ChecklistItem>> MoveChecklistItemAsync(string cardId, string checkItemId, string pos) =>
+        PatchChecklistItemAsync(cardId, checkItemId, new Dictionary<string, string> { ["pos"] = pos });
+
+    private Task<ApiResponse<ChecklistItem>> PatchChecklistItemAsync(
+        string cardId,
+        string checkItemId,
+        Dictionary<string, string> formData) =>
         SendForObjectAsync<ChecklistItem>(
             HttpMethod.Put,
             BuildUrl($"/cards/{cardId}/checkItem/{checkItemId}"),
-            new FormUrlEncodedContent(new Dictionary<string, string> { ["state"] = state }),
+            new FormUrlEncodedContent(formData),
             "Failed to update checklist item",
             "UPDATE_FAILED",
             "Card or checklist item not found");
+
+    public Task<ApiResponse<Checklist>> UpdateChecklistAsync(string checklistId, string? name, string? pos)
+    {
+        var formData = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(name)) formData["name"] = name;
+        if (!string.IsNullOrEmpty(pos)) formData["pos"] = pos;
+
+        if (formData.Count == 0)
+            return Task.FromResult(ApiResponse<Checklist>.Fail("No update parameters provided", "NO_PARAMS"));
+
+        return SendForObjectAsync<Checklist>(
+            HttpMethod.Put,
+            BuildUrl($"/checklists/{checklistId}"),
+            new FormUrlEncodedContent(formData),
+            "Failed to update checklist",
+            "UPDATE_FAILED",
+            "Checklist not found");
+    }
 
     public Task<ApiResponse<bool>> DeleteChecklistItemAsync(string checklistId, string checkItemId) =>
         SendForSuccessAsync(

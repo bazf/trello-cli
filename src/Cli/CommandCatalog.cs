@@ -181,9 +181,9 @@ public static class CommandCatalog
         new("Not supported (no command exists)",
         [
             "Boards are read-only: they cannot be created, renamed, closed or deleted.",
-            "Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.",
+            "Lists cannot be deleted. Archiving one with --archive-list is the closest equivalent and is reversible.",
             "Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; --download-attachment returns its URL so you can retrieve it yourself.",
-            "Cards cannot be repositioned inside a list, and --move-card cannot move a card to a different board.",
+            "--move-card cannot move a card to a different board; --copy-card can copy one across.",
             "No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.",
             "Only comments written by the token’s own account can be edited or deleted.",
             "Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.",
@@ -191,7 +191,7 @@ public static class CommandCatalog
         ]),
         new("What the read commands return",
         [
-            "--get-boards, --get-lists and --get-all-cards return open items only; closed boards, archived lists and archived cards are omitted.",
+            "--get-boards, --get-lists and --get-all-cards return open items unless you pass --filter closed or --filter all.",
             "An archived card is still readable with --get-card and can be restored with --unarchive-card.",
             "--get-labels returns at most 1000 labels for a board.",
             "Results are returned exactly as Trello sends them, unpaged; large boards produce large JSON documents."
@@ -310,9 +310,14 @@ public static class CommandCatalog
             Dispatched: false),
 
         // Board
-        new("--get-boards", Groups.Board, "List the open boards of the authenticated member.",
-            Examples: [$"{ToolName} --get-boards"],
-            Notes: ["Closed (archived) boards are omitted.", "Usually the first call: other commands need the board ID."]),
+        new("--get-boards", Groups.Board, "List the boards of the authenticated member.",
+            Options: [new("--filter", "open|closed|all", "Which boards to return; defaults to open.")],
+            Examples: [$"{ToolName} --get-boards", $"{ToolName} --get-boards --filter all"],
+            Notes:
+            [
+                "Returns open boards unless --filter says otherwise.",
+                "Usually the first call: other commands need the board ID."
+            ]),
 
         new("--get-board", Groups.Board, "Get one board.",
             Arguments: [new("board-id", "Board ID or the short link from the board URL.")],
@@ -320,10 +325,15 @@ public static class CommandCatalog
             Notes: ["Boards are read-only in this CLI; there is no create, rename or delete."]),
 
         // List
-        new("--get-lists", Groups.List, "Get the open lists of a board.",
+        new("--get-lists", Groups.List, "Get the lists of a board.",
             Arguments: [new("board-id", "Board the lists belong to.")],
-            Examples: [$"{ToolName} --get-lists 5f2c3d4e5f6a7b8c9d0e1f2a"],
-            Notes: ["Archived lists are omitted."]),
+            Options: [new("--filter", "open|closed|all", "Which lists to return; defaults to open.")],
+            Examples:
+            [
+                $"{ToolName} --get-lists 5f2c3d4e5f6a7b8c9d0e1f2a",
+                $"{ToolName} --get-lists 5f2c3d4e5f6a7b8c9d0e1f2a --filter closed"
+            ],
+            Notes: ["Returns open lists unless --filter says otherwise."]),
 
         new("--create-list", Groups.List, "Create a list on a board.",
             Arguments: [new("board-id", "Board to create the list on."), new("name", "List name.")],
@@ -345,15 +355,57 @@ public static class CommandCatalog
                 "A pair that is not <list-id>:<pos> aborts the run with INVALID_PARAM at that point, after the earlier pairs have already moved."
             ]),
 
+        new("--update-list", Groups.List, "Rename or reposition a list.",
+            Arguments: [new("list-id", "List to change.")],
+            Options: [new("--name", "text", "New list name."), new("--pos", "top|bottom|number", "New position.")],
+            Examples: [$"{ToolName} --update-list 5f2c...1f2a --name \"In Review\""],
+            Notes: ["At least one option is required; without one the command returns NO_PARAMS."]),
+
+        new("--archive-list", Groups.List, "Archive a list.",
+            Arguments: [new("list-id", "List to archive.")],
+            Examples: [$"{ToolName} --archive-list 5f2c...1f2a"],
+            Notes:
+            [
+                "Reversible with --unarchive-list. The list's cards are archived with it and come back with it.",
+                "Archived lists are not returned by --get-lists unless you pass --filter closed or all."
+            ]),
+
+        new("--unarchive-list", Groups.List, "Restore an archived list.",
+            Arguments: [new("list-id", "List to restore.")],
+            Examples: [$"{ToolName} --unarchive-list 5f2c...1f2a"]),
+
+        new("--archive-all-cards", Groups.List, "Archive every card in a list.",
+            Arguments: [new("list-id", "List to empty.")],
+            Examples: [$"{ToolName} --archive-all-cards 5f2c...1f2a"],
+            Notes:
+            [
+                "Archives the cards but keeps the list. Each card can be restored with --unarchive-card.",
+                "One request regardless of how many cards the list holds."
+            ]),
+
+        new("--move-all-cards", Groups.List, "Move every card from one list to another.",
+            Arguments: [new("source-list-id", "List to empty."), new("target-list-id", "List to fill.")],
+            Examples: [$"{ToolName} --move-all-cards 5f2c...1f2a 5f2c...1f2b"],
+            Notes:
+            [
+                "Reads the target list first to find its board, so two requests are made.",
+                "Both lists must be on the same board."
+            ]),
+
         // Card
         new("--get-cards", Groups.Card, "Get the cards of a list.",
             Arguments: [new("list-id", "List to read.")],
             Examples: [$"{ToolName} --get-cards 5f2c3d4e5f6a7b8c9d0e1f2a"],
             Notes: ["Archived cards are omitted."]),
 
-        new("--get-all-cards", Groups.Card, "Get every open card on a board.",
+        new("--get-all-cards", Groups.Card, "Get every card on a board.",
             Arguments: [new("board-id", "Board to read.")],
-            Examples: [$"{ToolName} --get-all-cards 5f2c3d4e5f6a7b8c9d0e1f2a"],
+            Options: [new("--filter", "open|closed|all", "Which cards to return; defaults to open.")],
+            Examples:
+            [
+                $"{ToolName} --get-all-cards 5f2c3d4e5f6a7b8c9d0e1f2a",
+                $"{ToolName} --get-all-cards 5f2c3d4e5f6a7b8c9d0e1f2a --filter closed"
+            ],
             Notes:
             [
                 "Cheaper than one --get-cards per list, and the way to find a card by name: filter the result client-side.",
@@ -422,6 +474,88 @@ public static class CommandCatalog
             Arguments: [new("card-id", "Card to restore.")],
             Examples: [$"{ToolName} --unarchive-card 5f2c...1f2a"],
             Notes: ["Equivalent to --update-card <card-id> --closed false."]),
+
+        new("--copy-card", Groups.Card, "Copy a card into a list.",
+            Arguments: [new("card-id", "Card to copy."), new("target-list-id", "List to copy it into.")],
+            Options:
+            [
+                new("--name", "text", "Name for the copy; defaults to the original's name."),
+                new("--position", "top|bottom|number", "Where in the list the copy lands."),
+                new("--keep", "all|attachments,checklists,comments,due,labels,members,stickers",
+                    "What to carry over; defaults to all.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --copy-card 5f2c...1f2a 5f2c...1f2b",
+                $"{ToolName} --copy-card 5f2c...1f2a 5f2c...1f2b --name \"Retry\" --keep checklists,labels"
+            ],
+            Notes:
+            [
+                "Copies everything by default. Trello's own default is the name alone, which is rarely what a copy is for.",
+                "The destination list may be on another board, unlike --move-card."
+            ]),
+
+        new("--set-card-position", Groups.Card, "Move a card within its list.",
+            Arguments: [new("card-id", "Card to move."), new("position", "top, bottom, or a number.")],
+            Examples: [$"{ToolName} --set-card-position 5f2c...1f2a top"],
+            Notes: ["Changes the order inside the list; use --move-card to change list."]),
+
+        new("--set-due-complete", Groups.Card, "Mark a card's due date done or not done.",
+            Arguments: [new("card-id", "Card to change."), new("state", "true or false.")],
+            Examples: [$"{ToolName} --set-due-complete 5f2c...1f2a true"],
+            Notes: ["Ticks the due date itself; it neither archives the card nor moves it."]),
+
+        new("--set-start-date", Groups.Card, "Set or clear a card's start date.",
+            Arguments: [new("card-id", "Card to change."), new("date", "ISO-8601 date, or \"\" to clear it.")],
+            Examples:
+            [
+                $"{ToolName} --set-start-date 5f2c...1f2a 2026-03-01",
+                $"{ToolName} --set-start-date 5f2c...1f2a \"\""
+            ],
+            Notes: ["Forwarded to Trello unvalidated, like --due."]),
+
+        new("--set-card-cover", Groups.Card, "Set a card's cover.",
+            Arguments: [new("card-id", "Card to change.")],
+            Options:
+            [
+                new("--color", "color", "Cover color, for example red or blue."),
+                new("--attachment", "attachment-id", "Use an existing image attachment as the cover."),
+                new("--size", "normal|full", "How much of the card the cover takes."),
+                new("--brightness", "light|dark", "Text contrast over the cover.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --set-card-cover 5f2c...1f2a --color blue --size full",
+                $"{ToolName} --set-card-cover 5f2c...1f2a --attachment 5f2c...1f2b"
+            ],
+            Notes:
+            [
+                "At least one option is required; without one the command returns NO_PARAMS.",
+                "An attachment cover must already be on the card and must be an image."
+            ]),
+
+        new("--clear-card-cover", Groups.Card, "Remove a card's cover.",
+            Arguments: [new("card-id", "Card to change.")],
+            Examples: [$"{ToolName} --clear-card-cover 5f2c...1f2a"],
+            Notes: ["Clears the cover only; an attachment used as one stays on the card."]),
+
+        new("--get-card-activity", Groups.Card, "Read a card's activity feed.",
+            Arguments: [new("card-id", "Card to read.")],
+            Options:
+            [
+                new("--limit", "n", "Maximum entries to return."),
+                new("--filter", "action-types", "Comma-separated Trello action types; defaults to all.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --get-card-activity 5f2c...1f2a --limit 20",
+                $"{ToolName} --get-card-activity 5f2c...1f2a --filter updateCard,commentCard"
+            ],
+            Notes:
+            [
+                "Answers who moved or changed a card and when.",
+                "Each entry's data field differs by action type and is passed through as Trello sends it."
+            ]),
 
         new("--add-card-label", Groups.Card, "Add one label to a card.",
             Arguments: [new("card-id", "Card to label."), new("label-id", "Label to add.")],
@@ -662,6 +796,24 @@ public static class CommandCatalog
                 "Any other state returns INVALID_PARAM.",
                 "Only the state can change; the item text cannot."
             ]),
+
+        new("--update-checklist", Groups.Checklist, "Rename or reposition a checklist.",
+            Arguments: [new("checklist-id", "Checklist to change.")],
+            Options: [new("--name", "text", "New checklist name."), new("--pos", "top|bottom|number", "New position.")],
+            Examples: [$"{ToolName} --update-checklist 5f2c...1f2a --name \"Release steps\""],
+            Notes: ["At least one option is required; without one the command returns NO_PARAMS."]),
+
+        new("--rename-checklist-item", Groups.Checklist, "Rename an item in a checklist.",
+            Arguments: [new("card-id", "Card holding the checklist."), new("item-id", "Item to rename.")],
+            Options: [new("--name", "text", "New item text.")],
+            Examples: [$"{ToolName} --rename-checklist-item 5f2c...1f2a 5f2c...1f2b --name \"Ship it\""],
+            Notes: ["Takes a card ID, like --update-checklist-item and unlike the add and delete item commands."]),
+
+        new("--move-checklist-item", Groups.Checklist, "Reorder an item within its checklist.",
+            Arguments: [new("card-id", "Card holding the checklist."), new("item-id", "Item to move.")],
+            Options: [new("--pos", "top|bottom|number", "New position.")],
+            Examples: [$"{ToolName} --move-checklist-item 5f2c...1f2a 5f2c...1f2b --pos top"],
+            Notes: ["Takes a card ID, like --update-checklist-item."]),
 
         new("--delete-checklist-item", Groups.Checklist, "Delete an item from a checklist.",
             Arguments: [new("checklist-id", "Checklist holding the item."), new("item-id", "Item to delete.")],

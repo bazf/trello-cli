@@ -141,6 +141,27 @@ Only open lists are returned by `--get-lists`. Lists cannot be renamed, archived
 deleted here. `--bulk-move-lists` is sequential and stops at the first failure, so the
 pairs before it stay applied and the response reports where it stopped.
 
+#### Updating and Archiving Lists
+
+```bash
+# Rename or reposition
+trello-cli --update-list <list-id> --name "In Review"
+trello-cli --update-list <list-id> --pos top
+
+# Archive and restore; a list's cards are archived with it and return with it
+trello-cli --archive-list <list-id>
+trello-cli --unarchive-list <list-id>
+
+# Empty a list without removing it
+trello-cli --archive-all-cards <list-id>
+trello-cli --move-all-cards <source-list-id> <target-list-id>
+```
+
+Lists cannot be deleted; `--archive-list` is the reversible equivalent. Archived lists
+are hidden from `--get-lists` unless you pass `--filter closed` or `--filter all`.
+`--move-all-cards` reads the target list first to find its board, so it makes two
+requests, and both lists must be on the same board.
+
 ### Card Operations
 
 #### Reading Cards
@@ -231,6 +252,55 @@ trello-cli --update-card <card-id> --closed false
 trello-cli --delete-card <card-id>
 # Returns: {"ok":true,"data":true}
 ```
+
+#### Copying Cards
+
+```bash
+# Copy a card, carrying everything over
+trello-cli --copy-card <card-id> <target-list-id>
+
+# Rename the copy, place it, or narrow what comes along
+trello-cli --copy-card <card-id> <target-list-id> --name "Retry" --position top
+trello-cli --copy-card <card-id> <target-list-id> --keep checklists,labels
+```
+
+`--keep` defaults to `all`. Trello's own default is the name alone, which is rarely
+what a copy is for. Unlike `--move-card`, the destination list may be on another board.
+
+#### Positioning, Dates and Covers
+
+```bash
+# Reorder a card inside its list (--move-card changes which list it is in)
+trello-cli --set-card-position <card-id> top
+trello-cli --set-card-position <card-id> 65535
+
+# Tick or untick the due date; this does not archive or move the card
+trello-cli --set-due-complete <card-id> true
+
+# Set or clear a start date
+trello-cli --set-start-date <card-id> 2026-03-01
+trello-cli --set-start-date <card-id> ""
+
+# Cover: a color, or an image already attached to this card
+trello-cli --set-card-cover <card-id> --color blue --size full
+trello-cli --set-card-cover <card-id> --attachment <attachment-id> --brightness dark
+trello-cli --clear-card-cover <card-id>
+```
+
+`--set-card-cover` needs at least one option, or it returns `NO_PARAMS`.
+`--clear-card-cover` removes the cover only; an attachment used as one stays on the card.
+
+#### Card Activity
+
+```bash
+# Who changed this card, and when
+trello-cli --get-card-activity <card-id> --limit 20
+trello-cli --get-card-activity <card-id> --filter updateCard,commentCard
+# Returns: {"ok":true,"data":[{"id":"...","type":"updateCard","date":"...","memberCreator":{...},"data":{...}}]}
+```
+
+Each entry's `data` differs by action type and is passed through exactly as Trello
+sends it, so read the `type` before reaching into `data`.
 
 ### Comment Operations
 
@@ -475,6 +545,18 @@ trello-cli --update-checklist-item <card-id> <item-id> incomplete
 # Returns: {"ok":true,"data":{"id":"...","name":"Item name","state":"incomplete",...}}
 ```
 
+#### Renaming and Reordering Checklists
+
+```bash
+# The checklist itself
+trello-cli --update-checklist <checklist-id> --name "Release steps"
+trello-cli --update-checklist <checklist-id> --pos top
+
+# Its items; like --update-checklist-item these take the CARD id
+trello-cli --rename-checklist-item <card-id> <item-id> --name "Ship it"
+trello-cli --move-checklist-item <card-id> <item-id> --pos top
+```
+
 #### Deleting Checklist Items
 
 ```bash
@@ -610,9 +692,9 @@ Also printed by `trello-cli --help` and returned under `data.restrictions` by
 **Not supported (no command exists)**
 
 - Boards are read-only: they cannot be created, renamed, closed or deleted.
-- Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
+- Lists cannot be deleted. Archiving one with `--archive-list` is the closest equivalent and is reversible.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
-- Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
+- `--move-card` cannot move a card to a different board; `--copy-card` can copy one across.
 - No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
 - Only comments written by the token's own account can be edited or deleted.
 - Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
@@ -620,7 +702,7 @@ Also printed by `trello-cli --help` and returned under `data.restrictions` by
 
 **What the read commands return**
 
-- `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; closed boards, archived lists and archived cards are omitted.
+- `--get-boards`, `--get-lists` and `--get-all-cards` return open items unless you pass `--filter closed` or `--filter all`.
 - An archived card is still readable with `--get-card` and can be restored with `--unarchive-card`.
 - `--get-labels` returns at most 1000 labels for a board.
 - Results are returned exactly as Trello sends them, unpaged; large boards produce large JSON documents.

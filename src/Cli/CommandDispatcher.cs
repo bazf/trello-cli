@@ -24,16 +24,16 @@ public sealed class CommandDispatcher : ICommandDispatcher
         // Keys must match CommandCatalog.DispatchedCommands; a test asserts both directions.
         _handlers = new Dictionary<string, Func<string[], Task>>(StringComparer.Ordinal)
         {
-            ["--get-boards"] = _ => board.GetBoardsAsync(),
+            ["--get-boards"] = args => board.GetBoardsAsync(GetNamedArg(args, "--filter")),
             ["--get-board"] = args => board.GetBoardAsync(GetArg(args, 1)),
 
-            ["--get-lists"] = args => lists.GetListsAsync(GetArg(args, 1)),
+            ["--get-lists"] = args => lists.GetListsAsync(GetArg(args, 1), GetNamedArg(args, "--filter")),
             ["--create-list"] = args => lists.CreateListAsync(GetArg(args, 1), GetArg(args, 2)),
             ["--move-list"] = args => lists.MoveListAsync(GetArg(args, 1), GetArg(args, 2)),
             ["--bulk-move-lists"] = args => lists.BulkMoveListsAsync(args[1..]),
 
             ["--get-cards"] = args => cards.GetCardsAsync(GetArg(args, 1)),
-            ["--get-all-cards"] = args => cards.GetAllCardsAsync(GetArg(args, 1)),
+            ["--get-all-cards"] = args => cards.GetAllCardsAsync(GetArg(args, 1), GetNamedArg(args, "--filter")),
             ["--get-card"] = args => cards.GetCardAsync(GetArg(args, 1)),
             ["--create-card"] = args => cards.CreateCardAsync(
                 GetArg(args, 1),
@@ -87,6 +87,49 @@ public sealed class CommandDispatcher : ICommandDispatcher
                 GetArg(args, 2),
                 GetArg(args, 3)),
             ["--delete-checklist-item"] = args => checklists.DeleteChecklistItemAsync(GetArg(args, 1), GetArg(args, 2)),
+
+            ["--copy-card"] = args => cards.CopyCardAsync(
+                GetArg(args, 1),
+                GetArg(args, 2),
+                GetNamedArg(args, "--name"),
+                GetNamedArg(args, "--position"),
+                GetNamedArg(args, "--keep")),
+            ["--set-card-position"] = args => cards.SetCardPositionAsync(GetArg(args, 1), GetArg(args, 2)),
+            ["--set-due-complete"] = args => cards.SetDueCompleteAsync(GetArg(args, 1), GetArg(args, 2)),
+            ["--set-start-date"] = args => cards.SetStartDateAsync(GetArg(args, 1), GetArg(args, 2)),
+            ["--set-card-cover"] = args => cards.SetCardCoverAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--color"),
+                GetNamedArg(args, "--attachment"),
+                GetNamedArg(args, "--size"),
+                GetNamedArg(args, "--brightness")),
+            ["--clear-card-cover"] = args => cards.ClearCardCoverAsync(GetArg(args, 1)),
+            ["--get-card-activity"] = args => cards.GetCardActivityAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--limit"),
+                GetNamedArg(args, "--filter")),
+
+            ["--update-list"] = args => lists.UpdateListAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--name"),
+                GetNamedArg(args, "--pos")),
+            ["--archive-list"] = args => lists.ArchiveListAsync(GetArg(args, 1)),
+            ["--unarchive-list"] = args => lists.UnarchiveListAsync(GetArg(args, 1)),
+            ["--archive-all-cards"] = args => lists.ArchiveAllCardsAsync(GetArg(args, 1)),
+            ["--move-all-cards"] = args => lists.MoveAllCardsAsync(GetArg(args, 1), GetArg(args, 2)),
+
+            ["--update-checklist"] = args => checklists.UpdateChecklistAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--name"),
+                GetNamedArg(args, "--pos")),
+            ["--rename-checklist-item"] = args => checklists.RenameChecklistItemAsync(
+                GetArg(args, 1),
+                GetArg(args, 2),
+                GetNamedArg(args, "--name")),
+            ["--move-checklist-item"] = args => checklists.MoveChecklistItemAsync(
+                GetArg(args, 1),
+                GetArg(args, 2),
+                GetNamedArg(args, "--pos")),
 
             ["--update-comment"] = args => cards.UpdateCommentAsync(GetArg(args, 1), GetArg(args, 2), GetArg(args, 3)),
             ["--delete-comment"] = args => cards.DeleteCommentAsync(GetArg(args, 1), GetArg(args, 2)),

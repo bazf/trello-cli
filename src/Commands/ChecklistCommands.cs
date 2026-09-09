@@ -115,4 +115,58 @@ public class ChecklistCommands(TrelloApiService api, TextWriter output)
         var result = await Api.DeleteChecklistItemAsync(checklistId, checkItemId);
         Write(result);
     }
+
+    public async Task UpdateChecklistAsync(string checklistId, string? name, string? pos)
+    {
+        if (string.IsNullOrEmpty(checklistId))
+        {
+            Write(ApiResponse<object>.Fail("Checklist ID required", "MISSING_PARAM"));
+            return;
+        }
+
+        Write(await Api.UpdateChecklistAsync(checklistId, name, pos));
+    }
+
+    public async Task RenameChecklistItemAsync(string cardId, string itemId, string? name)
+    {
+        if (!RequireCardAndItem(cardId, itemId)) return;
+
+        if (string.IsNullOrEmpty(name))
+        {
+            Write(ApiResponse<object>.Fail("--name is required", "MISSING_PARAM"));
+            return;
+        }
+
+        Write(await Api.RenameChecklistItemAsync(cardId, itemId, name));
+    }
+
+    public async Task MoveChecklistItemAsync(string cardId, string itemId, string? pos)
+    {
+        if (!RequireCardAndItem(cardId, itemId)) return;
+
+        if (string.IsNullOrEmpty(pos))
+        {
+            Write(ApiResponse<object>.Fail("--pos is required", "MISSING_PARAM"));
+            return;
+        }
+
+        Write(await Api.MoveChecklistItemAsync(cardId, itemId, pos));
+    }
+
+    private bool RequireCardAndItem(string cardId, string itemId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+        {
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(itemId))
+        {
+            Write(ApiResponse<object>.Fail("Item ID required", "MISSING_PARAM"));
+            return false;
+        }
+
+        return true;
+    }
 }

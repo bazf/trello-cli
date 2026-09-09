@@ -169,6 +169,116 @@ public class TrelloApiRequestShapeTests
         }
     }
 
+    [Fact]
+    public async Task CopyCardKeepsEverythingUnlessToldOtherwise()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.CopyCardAsync("card-1", "list-2", name: null, position: null, keep: null);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("/1/cards", request.Path);
+        Assert.Contains("idCardSource=card-1", request.Content);
+        Assert.Contains("idList=list-2", request.Content);
+        // Trello's own default copies the name alone, which loses the description,
+        // checklists, labels and members.
+        Assert.Contains("keepFromSource=all", request.Content);
+    }
+
+    [Fact]
+    public async Task SetCardCoverSendsTheCoverAsJsonInsideTheFormField()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.SetCardCoverAsync("card-1", color: "blue", attachmentId: null, size: "full", brightness: null);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Put, request.Method);
+        Assert.Equal("/1/cards/card-1", request.Path);
+        var decoded = Uri.UnescapeDataString(request.Content.Replace("+", " "));
+        Assert.Contains("""cover={"color":"blue","size":"full"}""", decoded);
+    }
+
+    [Fact]
+    public async Task SetCardCoverWithoutAnyOptionIsRejectedWithoutARequest()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        var response = await service.SetCardCoverAsync("card-1", null, null, null, null);
+
+        Assert.False(response.Ok);
+        Assert.Equal("NO_PARAMS", response.Code);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task ClearCardCoverSendsAnEmptyCover()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.ClearCardCoverAsync("card-1");
+
+        Assert.Equal("cover=", Assert.Single(handler.Requests).Content);
+    }
+
+    [Fact]
+    public async Task ArchiveListPutsTheClosedFlag()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.SetListClosedAsync("list-1", closed: true);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Put, request.Method);
+        Assert.Equal("/1/lists/list-1/closed", request.Path);
+        Assert.Equal("value=true", request.Content);
+    }
+
+    [Fact]
+    public async Task MoveAllCardsResolvesTheTargetBoardBeforeMoving()
+    {
+        // The caller has list IDs; Trello wants the destination board alongside the
+        // destination list, so the target list is read first.
+        var (service, handler) = await CreateAsync("""{"id":"list-2","idBoard":"board-9"}""");
+
+        await service.MoveAllCardsAsync("list-1", "list-2");
+
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("/1/lists/list-2", handler.Requests[0].Path);
+        Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
+        Assert.Equal("/1/lists/list-1/moveAllCards", handler.Requests[1].Path);
+        Assert.Contains("idBoard=board-9", handler.Requests[1].Query);
+        Assert.Contains("idList=list-2", handler.Requests[1].Query);
+    }
+
+    [Fact]
+    public async Task GetCardActivityDefaultsToEveryActionType()
+    {
+        var (service, handler) = await CreateAsync("[]");
+
+        await service.GetCardActivityAsync("card-1", limit: null, filter: null);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("/1/cards/card-1/actions", request.Path);
+        Assert.Equal("filter=all", request.Query);
+    }
+
+    [Theory]
+    [InlineData(null, "filter=open")]
+    [InlineData("all", "filter=all")]
+    [InlineData("closed", "filter=closed")]
+    public async Task ReadCommandsDefaultToOpenItemsAndHonourTheFilter(string? filter, string expected)
+    {
+        var (service, handler) = await CreateAsync("[]");
+
+        await service.GetBoardsAsync(filter);
+        await service.GetListsAsync("board-1", filter);
+        await service.GetCardsInBoardAsync("board-1", filter);
+
+        Assert.All(handler.Requests, request => Assert.Equal(expected, request.Query));
+    }
+
     private static async Task<(TrelloApiService Service, RecordingHandler Handler)> CreateAsync(string body)
     {
         var handler = new RecordingHandler(body);

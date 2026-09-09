@@ -7,9 +7,9 @@ namespace TrelloCli.Commands;
 public class BoardCommands(TrelloApiService api, TextWriter output)
     : CommandsBase(api, output)
 {
-    public async Task GetBoardsAsync()
+    public async Task GetBoardsAsync(string? filter = null)
     {
-        var result = await Api.GetBoardsAsync();
+        var result = await Api.GetBoardsAsync(filter);
         Write(result);
     }
 

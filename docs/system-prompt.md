@@ -28,6 +28,11 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--create-list` | Create a list on a board. `--create-list <board-id> <name>` |
 | `--move-list` | Reposition a list on its board. `--move-list <list-id> <pos>` |
 | `--bulk-move-lists` | Reposition several lists in one call. `--bulk-move-lists <list-id:pos>...` |
+| `--update-list` | Rename or reposition a list. `--update-list <list-id> [--name <text>] [--pos <pos>]` |
+| `--archive-list` | Archive a list and its cards. `--archive-list <list-id>` |
+| `--unarchive-list` | Restore an archived list. `--unarchive-list <list-id>` |
+| `--archive-all-cards` | Archive every card in a list. `--archive-all-cards <list-id>` |
+| `--move-all-cards` | Move every card between lists. `--move-all-cards <source-list-id> <target-list-id>` |
 | `--get-cards` | Get the cards of a list. `--get-cards <list-id>` |
 | `--get-all-cards` | Get every open card on a board. `--get-all-cards <board-id>` |
 | `--get-card` | Get one card. `--get-card <card-id>` |
@@ -37,6 +42,13 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--archive-card` | Archive a card. `--archive-card <card-id>` |
 | `--unarchive-card` | Restore an archived card. `--unarchive-card <card-id>` |
 | `--delete-card` | Delete a card. `--delete-card <card-id>` |
+| `--copy-card` | Copy a card into a list. `--copy-card <card-id> <target-list-id> [--name <text>] [--position <pos>] [--keep <what>]` |
+| `--set-card-position` | Move a card within its list. `--set-card-position <card-id> <top\|bottom\|number>` |
+| `--set-due-complete` | Tick a card's due date. `--set-due-complete <card-id> <true\|false>` |
+| `--set-start-date` | Set or clear a start date. `--set-start-date <card-id> <date>` |
+| `--set-card-cover` | Set a card's cover. `--set-card-cover <card-id> [--color <c>] [--attachment <id>] [--size <s>] [--brightness <b>]` |
+| `--clear-card-cover` | Remove a card's cover. `--clear-card-cover <card-id>` |
+| `--get-card-activity` | Read a card's activity. `--get-card-activity <card-id> [--limit <n>] [--filter <types>]` |
 | `--get-comments` | Get the comments on a card. `--get-comments <card-id>` |
 | `--add-comment` | Add a comment to a card. `--add-comment <card-id> <text>` |
 | `--update-comment` | Rewrite an existing comment. `--update-comment <card-id> <comment-id> <text>` |
@@ -52,6 +64,9 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--remove-card-member` | Unassign a member from a card. `--remove-card-member <card-id> <member-id>` |
 | `--search` | Search for cards and boards. `--search <query> [--board <board-id>] [--limit <n>] [--cards-only]` |
 | `--search-members` | Search for members. `--search-members <query> [--limit <n>]` |
+| `--update-checklist` | Rename or reposition a checklist. `--update-checklist <checklist-id> [--name <text>] [--pos <pos>]` |
+| `--rename-checklist-item` | Rename a checklist item. `--rename-checklist-item <card-id> <item-id> --name <text>` |
+| `--move-checklist-item` | Reorder a checklist item. `--move-checklist-item <card-id> <item-id> --pos <pos>` |
 | `--get-labels` | List the labels defined on a board. `--get-labels <board-id>` |
 | `--create-label` | Create a label on a board. `--create-label <board-id> <name> [--color <color>]` |
 | `--update-label` | Rename or recolor a label. `--update-label <label-id> [--name <text>] [--color <color>]` |

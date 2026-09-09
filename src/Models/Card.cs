@@ -22,6 +22,12 @@ public class Card
     [JsonPropertyName("due")]
     public string? Due { get; set; }
 
+    [JsonPropertyName("dueComplete")]
+    public bool DueComplete { get; set; }
+
+    [JsonPropertyName("start")]
+    public string? Start { get; set; }
+
     [JsonPropertyName("closed")]
     public bool Closed { get; set; }
 
@@ -36,6 +42,24 @@ public class Card
 
     [JsonPropertyName("idMembers")]
     public List<string> MemberIds { get; set; } = new();
+
+    [JsonPropertyName("cover")]
+    public CardCover? Cover { get; set; }
+}
+
+public class CardCover
+{
+    [JsonPropertyName("color")]
+    public string? Color { get; set; }
+
+    [JsonPropertyName("brightness")]
+    public string? Brightness { get; set; }
+
+    [JsonPropertyName("size")]
+    public string? Size { get; set; }
+
+    [JsonPropertyName("idAttachment")]
+    public string? AttachmentId { get; set; }
 }
 
 public class Label
