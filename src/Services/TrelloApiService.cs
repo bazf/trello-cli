@@ -46,6 +46,13 @@ public class TrelloApiService : IAuthenticationChecker
         return await response.Content.ReadAsStringAsync();
     }
 
+    // Reports the transport-level status without echoing exception text, which can
+    // carry request details, so callers can still distinguish 401 from 429 or 5xx.
+    private static string DescribeHttpFailure(HttpRequestException exception) =>
+        exception.StatusCode is { } statusCode
+            ? $"HTTP request failed with status {(int)statusCode}."
+            : HttpRequestFailedMessage;
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, HttpContent? content = null)
     {
         using var request = new HttpRequestMessage(method, url) { Content = content };
@@ -65,9 +72,9 @@ public class TrelloApiService : IAuthenticationChecker
             var boards = JsonSerializer.Deserialize<List<Board>>(response) ?? new();
             return ApiResponse<List<Board>>.Success(boards);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Board>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<Board>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -90,9 +97,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Board>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Board>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Board>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -114,9 +121,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<TrelloList>>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<TrelloList>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<TrelloList>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -143,9 +150,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<TrelloList>.Fail("List not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<TrelloList>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<TrelloList>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -166,9 +173,9 @@ public class TrelloApiService : IAuthenticationChecker
                 ? ApiResponse<TrelloList>.Success(list)
                 : ApiResponse<TrelloList>.Fail("Failed to create list", "CREATE_FAILED");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<TrelloList>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<TrelloList>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -190,9 +197,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Card>>.Fail("List not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Card>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<Card>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -213,9 +220,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Card>>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Card>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<Card>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -238,9 +245,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Card>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Card>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Card>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -277,9 +284,9 @@ public class TrelloApiService : IAuthenticationChecker
                 ? ApiResponse<Card>.Success(card)
                 : ApiResponse<Card>.Fail("Failed to create card", "CREATE_FAILED");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Card>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Card>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -325,9 +332,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Card>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Card>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Card>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -353,9 +360,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -377,9 +384,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Comment>>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Comment>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<Comment>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -404,9 +411,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Comment>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Comment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Comment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -428,9 +435,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Label>>.Fail("Board not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Label>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<Label>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -458,9 +465,9 @@ public class TrelloApiService : IAuthenticationChecker
                 ? ApiResponse<Label>.Success(label)
                 : ApiResponse<Label>.Fail("Failed to create label", "CREATE_FAILED");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Label>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Label>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -495,9 +502,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Label>.Fail("Label not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Label>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Label>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -518,9 +525,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Label not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -547,9 +554,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<object>.Fail("Invalid API key or token", "UNAUTHORIZED");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<object>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<object>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -571,9 +578,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Attachment>>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Attachment>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<Attachment>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -596,9 +603,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Attachment>.Fail("Attachment not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Attachment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Attachment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -642,9 +649,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Attachment>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Attachment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Attachment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -680,9 +687,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Attachment>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Attachment>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Attachment>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -703,9 +710,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Attachment not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -727,9 +734,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<List<Checklist>>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<List<Checklist>>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<List<Checklist>>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -754,9 +761,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<Checklist>.Fail("Card not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<Checklist>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<Checklist>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -777,9 +784,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Checklist not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -804,9 +811,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<ChecklistItem>.Fail("Checklist not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<ChecklistItem>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<ChecklistItem>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -836,9 +843,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<ChecklistItem>.Fail("Card or checklist item not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<ChecklistItem>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<ChecklistItem>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {
@@ -859,9 +866,9 @@ public class TrelloApiService : IAuthenticationChecker
         {
             return ApiResponse<bool>.Fail("Checklist or item not found", "NOT_FOUND");
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException exception)
         {
-            return ApiResponse<bool>.Fail(HttpRequestFailedMessage, "HTTP_ERROR");
+            return ApiResponse<bool>.Fail(DescribeHttpFailure(exception), "HTTP_ERROR");
         }
         catch (Exception)
         {

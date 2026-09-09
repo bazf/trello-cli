@@ -146,7 +146,7 @@ public class TrelloApiServiceTests
 
         Assert.False(response.Ok);
         Assert.Equal("HTTP_ERROR", response.Code);
-        Assert.Equal("HTTP request failed.", response.Error);
+        Assert.Equal("HTTP request failed with status 302.", response.Error);
         Assert.Single(handler.Requests);
         Assert.Equal("https://api.trello.com/1/members/me/boards?filter=open", handler.Requests[0].Uri);
     }
@@ -154,7 +154,11 @@ public class TrelloApiServiceTests
     [Fact]
     public async Task ProductionClient_DoesNotFollowACrossHostRedirectThatCouldReceiveTheAuthorizationHeader()
     {
-        using var servers = new RedirectingLoopbackServers();
+        // The cross-host check needs an IPv6 loopback listener alongside the IPv4 one;
+        // hosts and containers without IPv6 cannot express the scenario.
+        using var servers = RedirectingLoopbackServers.TryCreate();
+        if (servers is null) return;
+
         var config = await CreateConfigAsync();
         using var http = TrelloApiService.CreateProductionHttpClient();
         var service = new TrelloApiService(config, http, servers.SourceBaseUrl);
@@ -165,9 +169,38 @@ public class TrelloApiServiceTests
 
         Assert.False(response.Ok);
         Assert.Equal("HTTP_ERROR", response.Code);
-        Assert.Equal("HTTP request failed.", response.Error);
+        Assert.Equal("HTTP request failed with status 302.", response.Error);
         Assert.Contains($"Authorization: {ExpectedAuthorization}", await initialRequest, StringComparison.Ordinal);
         Assert.Null(await redirectedRequest);
+    }
+
+    [Fact]
+    public async Task FailedResponses_ReportTheStatusCodeWithoutCredentialCanaries()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+        var service = await CreateServiceAsync(handler);
+
+        var response = await service.GetBoardsAsync();
+
+        Assert.False(response.Ok);
+        Assert.Equal("HTTP_ERROR", response.Code);
+        Assert.Equal("HTTP request failed with status 429.", response.Error);
+        Assert.DoesNotContain(ApiKeyCanary, response.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(TokenCanary, response.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TransportFailuresWithoutAStatusCode_ReportTheSanitizedFallbackMessage()
+    {
+        var handler = new RecordingHandler(_ => throw new HttpRequestException("connection-failure-token-canary"));
+        var service = await CreateServiceAsync(handler);
+
+        var response = await service.GetBoardsAsync();
+
+        Assert.False(response.Ok);
+        Assert.Equal("HTTP_ERROR", response.Code);
+        Assert.Equal("HTTP request failed.", response.Error);
+        Assert.DoesNotContain("connection-failure-token-canary", response.Error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -292,13 +325,35 @@ public class TrelloApiServiceTests
 
     private sealed class RedirectingLoopbackServers : IDisposable
     {
-        private readonly TcpListener _source = new(IPAddress.IPv6Loopback, 0);
-        private readonly TcpListener _target = new(IPAddress.Loopback, 0);
+        private readonly TcpListener _source;
+        private readonly TcpListener _target;
 
-        public RedirectingLoopbackServers()
+        private RedirectingLoopbackServers(TcpListener source, TcpListener target)
         {
+            _source = source;
+            _target = target;
             _source.Start();
             _target.Start();
+        }
+
+        public static RedirectingLoopbackServers? TryCreate()
+        {
+            if (!Socket.OSSupportsIPv6) return null;
+
+            TcpListener? source = null;
+            TcpListener? target = null;
+            try
+            {
+                source = new TcpListener(IPAddress.IPv6Loopback, 0);
+                target = new TcpListener(IPAddress.Loopback, 0);
+                return new RedirectingLoopbackServers(source, target);
+            }
+            catch (SocketException)
+            {
+                source?.Dispose();
+                target?.Dispose();
+                return null;
+            }
         }
 
         public string SourceBaseUrl => $"http://[::1]:{((IPEndPoint)_source.LocalEndpoint).Port}/1";
