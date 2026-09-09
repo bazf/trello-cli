@@ -406,7 +406,9 @@ public class ConfigServiceTests
     [Fact]
     public async Task ClearAuthAsync_WhenTheConfigDirectoryIsInaccessible_ReportsFailureAndPreservesLegacyConfig()
     {
-        if (OperatingSystem.IsWindows()) return;
+        // Directory permissions do not restrict a privileged process, so the delete
+        // would succeed and the scenario under test cannot be produced there.
+        if (OperatingSystem.IsWindows() || Environment.IsPrivilegedProcess) return;
 
         using var directory = new TemporaryDirectory();
         var configPath = Path.Combine(directory.Path, "config.json");
