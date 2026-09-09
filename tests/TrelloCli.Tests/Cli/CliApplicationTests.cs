@@ -334,6 +334,7 @@ public class CliApplicationTests
     [InlineData(null)]
     [InlineData("--help")]
     [InlineData("-h")]
+    [InlineData("--commands")]
     [InlineData("--version")]
     [InlineData("-v")]
     public async Task RunAsync_CredentialIndependentCommands_DoNotCreateConfiguration(string? command)

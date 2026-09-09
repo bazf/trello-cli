@@ -67,13 +67,26 @@ public sealed class CliApplication
     {
         if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
         {
-            ShowHelp();
+            ShowHelp(args.Length > 1 ? args[1] : null);
+            return;
+        }
+
+        if (args[0] == "--commands")
+        {
+            ShowCommandCatalog(args.Length > 1 ? args[1] : null);
             return;
         }
 
         if (args[0] == "--version" || args[0] == "-v")
         {
             _output.WriteLine($"trello-cli v{Version}");
+            return;
+        }
+
+        // Rejected before any credential work so a typo reports the typo, not an auth error.
+        if (!CommandCatalog.Contains(args[0]))
+        {
+            Write(ApiResponse<object>.Fail(CommandCatalog.DescribeUnknownCommand(args[0]), "UNKNOWN_COMMAND"));
             return;
         }
 
@@ -153,113 +166,40 @@ public sealed class CliApplication
         Write(ApiResponse<object>.Fail(error, fallbackCode));
     }
 
-    private void ShowHelp()
+    private void ShowHelp(string? commandName)
     {
-        _output.WriteLine($@"trello-cli v{Version}
-CLI tool for Trello with AI-friendly JSON output
+        if (commandName is null)
+        {
+            _output.Write(HelpRenderer.RenderOverview(Version));
+            return;
+        }
 
-USAGE:
-  trello-cli <command> [arguments] [options]
+        var command = CommandCatalog.Find(commandName);
+        if (command is null)
+        {
+            Write(ApiResponse<object>.Fail(CommandCatalog.DescribeUnknownCommand(commandName), "UNKNOWN_COMMAND"));
+            return;
+        }
 
-AUTHENTICATION:
-  Option 1 - CLI (recommended):
-    trello-cli --set-auth <api-key>
-    You will be securely prompted for your Trello token.
+        _output.Write(HelpRenderer.RenderCommand(Version, command));
+    }
 
-  Option 2 - Environment variables:
-    TRELLO_API_KEY  - Your Trello API key
-    TRELLO_TOKEN    - Your Trello token
+    private void ShowCommandCatalog(string? commandName)
+    {
+        if (commandName is null)
+        {
+            Write(ApiResponse<CommandManifest>.Success(CommandCatalog.BuildManifest(Version)));
+            return;
+        }
 
-  Storage:
-    Windows Credential Manager; macOS Keychain; Linux Secret Service.
-    Linux requires secret-tool (libsecret-tools) and a running D-Bus Secret Service.
+        var command = CommandCatalog.Find(commandName);
+        if (command is null)
+        {
+            Write(ApiResponse<object>.Fail(CommandCatalog.DescribeUnknownCommand(commandName), "UNKNOWN_COMMAND"));
+            return;
+        }
 
-  Semantics:
-    Environment credentials override persisted credentials.
-    Legacy plaintext tokens are removed only after secure-store verification.
-    Migration failure preserves the legacy file and reports a safe warning.
-    Environment variables remain active after --clear-auth; it does not revoke tokens.
-    For headless use, set both TRELLO_API_KEY and TRELLO_TOKEN.
-
-  Get credentials: https://trello.com/app-key
-
-COMMANDS:
-  --help, -h                          Show this help
-  --version, -v                       Show version
-  --set-auth <api-key>                Save authentication using the operating system credential store
-  --clear-auth                        Remove persisted authentication
-  --check-auth                        Verify API credentials
-
-  Board:
-    --get-boards            List all boards
-    --get-board <id>        Get specific board
-
-  List:
-    --get-lists <board-id>              Get lists in a board
-    --create-list <board-id> <name>     Create new list
-    --move-list <list-id> <pos>         Move list to position (top, bottom, or a number)
-    --bulk-move-lists <id:pos>...       Move multiple lists, e.g. id1:top id2:bottom
-
-  Card:
-    --get-cards <list-id>               Get cards in a list
-    --get-all-cards <board-id>          Get all cards in a board
-    --get-card <card-id>                Get specific card
-    --create-card <list-id> <name>      Create card
-      [--desc <description>]
-      [--due <date>]
-      [--labels <ids>]                  Comma-separated label IDs
-      [--members <ids>]                 Comma-separated member IDs
-    --update-card <card-id>             Update card
-      [--name <name>]
-      [--desc <description>]
-      [--due <date>]
-      [--labels <ids>]
-      [--members <ids>]
-      [--closed <true|false>]           Archive/unarchive card
-    --archive-card <card-id>            Archive card (shortcut for --update-card --closed true)
-    --unarchive-card <card-id>          Unarchive card (shortcut for --update-card --closed false)
-    --move-card <card-id> <list-id>     Move card to list
-    --delete-card <card-id>             Delete card
-    --get-comments <card-id>            Get comments on a card
-    --add-comment <card-id> <text>      Add comment to a card
-
-  Attachment:
-    --list-attachments <card-id>                 List attachments on a card
-    --upload-attachment <card-id> <file-path>    Upload file as attachment
-      [--name <name>]                            Custom attachment name
-    --attach-url <card-id> <url>                 Attach URL to card
-      [--name <name>]                            Custom attachment name
-    --delete-attachment <card-id> <attach-id>    Delete attachment
-
-  Note: Downloading attachments is not supported. Trello's download API
-  requires browser authentication. Use --attach-url to link attachments.
-
-  Label:
-    --get-labels <board-id>                          List labels on a board
-    --create-label <board-id> <name>                 Create label on a board
-      [--color <color>]                              Trello color name (e.g. green, red, blue, orange...)
-    --update-label <label-id>                        Update label
-      [--name <name>]
-      [--color <color>]
-    --delete-label <label-id>                        Delete label
-
-  Checklist:
-    --get-checklists <card-id>                          Get checklists on a card
-    --create-checklist <card-id> <name>                 Create checklist on a card
-    --delete-checklist <checklist-id>                   Delete a checklist
-    --add-checklist-item <checklist-id> <name>          Add item to checklist
-    --update-checklist-item <card-id> <item-id> <state> Mark item complete/incomplete
-    --delete-checklist-item <checklist-id> <item-id>    Delete item from checklist
-
-OUTPUT:
-  All responses are JSON: {{""ok"":true,""data"":...}} or {{""ok"":false,""error"":""..."",""code"":""...""}}
-
-EXAMPLES:
-  trello-cli --get-boards
-  trello-cli --get-board abc123
-  trello-cli --create-card xyz789 ""My Task"" --desc ""Details""
-  trello-cli --move-card card123 list456
-");
+        Write(ApiResponse<CommandDefinition>.Success(command));
     }
 
     private void Write<T>(T response) => _output.WriteLine(OutputFormatter.ToJson(response));
