@@ -327,7 +327,11 @@ public class CliApplicationTests
 
         await application.RunAsync(["--version"]);
 
-        Assert.Equal($"trello-cli v2.0.0{Environment.NewLine}", output.ToString());
+        // Read from the assembly rather than repeating a literal here, so the assertion keeps
+        // testing what its name claims instead of needing an edit on every release.
+        var expected = typeof(CliApplication).Assembly.GetName().Version!.ToString(3);
+        Assert.Equal($"trello-cli v{expected}{Environment.NewLine}", output.ToString());
+        Assert.Matches(@"^\d+\.\d+\.\d+$", expected);
     }
 
     [Theory]

@@ -189,10 +189,10 @@ public static class CommandCatalog
             "Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; --download-attachment returns its URL so you can retrieve it yourself.",
             "--move-card cannot move a card to a different board; --copy-card can copy one across.",
             "Workspaces can be read but not created or changed. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.",
-            "Only comments written by the token’s own account can be edited or deleted.",
+            "Only comments written by the token's own account can be edited or deleted.",
             "Custom field values can be read and set, but the fields themselves cannot be created or deleted.",
             "Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.",
-            "Except for --bulk-move-lists there is no batching: one command performs one operation."
+            "Batching exists only where a command says so: --bulk-move-lists, --archive-all-cards, --move-all-cards and --download-all-attachments. Everything else is one operation per command."
         ]),
         new("What the read commands return",
         [

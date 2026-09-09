@@ -423,7 +423,7 @@ Printed by `trello-cli --help` and returned by `trello-cli --commands` under
 - Only comments written by the token's own account can be edited or deleted.
 - Custom field values can be read and set, but the fields themselves cannot be created or deleted.
 - Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
-- Except for `--bulk-move-lists` there is no batching: one command performs one operation.
+- Batching exists only where a command says so: `--bulk-move-lists`, `--archive-all-cards`, `--move-all-cards` and `--download-all-attachments`. Everything else is one operation per command.
 
 **What the read commands return**
 

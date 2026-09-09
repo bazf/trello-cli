@@ -13,7 +13,7 @@ A CLI tool that provides Trello integration with Claude Code. With this tool, yo
 
 ## Installation
 
-`trello-cli` 2.0.0 requires the .NET 10 SDK to build. Credential storage is
+`trello-cli` 2.1.0 requires the .NET 10 SDK to build. Credential storage is
 provided by the operating system:
 
 - Windows: Windows Credential Manager.
@@ -331,7 +331,7 @@ The same list is printed by `trello-cli --help` and returned by
 - Only comments written by the token's own account can be edited or deleted.
 - Custom field values can be read and set, but the fields themselves cannot be created or deleted.
 - Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
-- Except for `--bulk-move-lists` there is no batching: one command performs one operation.
+- Batching exists only where a command says so: `--bulk-move-lists`, `--archive-all-cards`, `--move-all-cards` and `--download-all-attachments`. Everything else is one operation per command.
 
 **What the read commands return**
 
