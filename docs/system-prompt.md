@@ -39,6 +39,19 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--delete-card` | Delete a card. `--delete-card <card-id>` |
 | `--get-comments` | Get the comments on a card. `--get-comments <card-id>` |
 | `--add-comment` | Add a comment to a card. `--add-comment <card-id> <text>` |
+| `--update-comment` | Rewrite an existing comment. `--update-comment <card-id> <comment-id> <text>` |
+| `--delete-comment` | Delete a comment. `--delete-comment <card-id> <comment-id>` |
+| `--add-card-label` | Add one label to a card, keeping the others. `--add-card-label <card-id> <label-id>` |
+| `--remove-card-label` | Remove one label from a card. `--remove-card-label <card-id> <label-id>` |
+| `--whoami` | Show the account the current token belongs to. `--whoami` |
+| `--get-member` | Look up a member by id or username. `--get-member <member>` |
+| `--get-members` | List the members of a board. `--get-members <board-id>` |
+| `--get-card-members` | List the members assigned to a card. `--get-card-members <card-id>` |
+| `--get-my-cards` | List cards assigned to you. `--get-my-cards [--filter <open\|closed\|all>]` |
+| `--add-card-member` | Assign a member to a card. `--add-card-member <card-id> <member-id>` |
+| `--remove-card-member` | Unassign a member from a card. `--remove-card-member <card-id> <member-id>` |
+| `--search` | Search for cards and boards. `--search <query> [--board <board-id>] [--limit <n>] [--cards-only]` |
+| `--search-members` | Search for members. `--search-members <query> [--limit <n>]` |
 | `--get-labels` | List the labels defined on a board. `--get-labels <board-id>` |
 | `--create-label` | Create a label on a board. `--create-label <board-id> <name> [--color <color>]` |
 | `--update-label` | Rename or recolor a label. `--update-label <label-id> [--name <text>] [--color <color>]` |

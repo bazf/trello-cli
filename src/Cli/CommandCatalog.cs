@@ -20,6 +20,8 @@ public static class CommandCatalog
         public const string List = "List";
         public const string Card = "Card";
         public const string Comment = "Comment";
+        public const string Member = "Member";
+        public const string Search = "Search";
         public const string Label = "Label";
         public const string Attachment = "Attachment";
         public const string Checklist = "Checklist";
@@ -34,6 +36,8 @@ public static class CommandCatalog
         Groups.List,
         Groups.Card,
         Groups.Comment,
+        Groups.Member,
+        Groups.Search,
         Groups.Label,
         Groups.Attachment,
         Groups.Checklist
@@ -132,7 +136,7 @@ public static class CommandCatalog
         new("MISSING_PARAM", "A required argument was not provided."),
         new("INVALID_PARAM", "An argument was provided in an unsupported form."),
         new("NO_PARAMS", "An update command was called without any field to change."),
-        new("NOT_FOUND", "The board, list, card, label, checklist, item or attachment does not exist or is not visible to the token."),
+        new("NOT_FOUND", "The board, list, card, label, checklist, item, attachment, member or comment does not exist or is not visible to the token."),
         new("FILE_NOT_FOUND", "The local file passed to --upload-attachment does not exist."),
         new("CREATE_FAILED", "Trello accepted the request but returned no usable resource."),
         new("UPDATE_FAILED", "Trello accepted the request but returned no usable resource."),
@@ -179,10 +183,9 @@ public static class CommandCatalog
             "Boards are read-only: they cannot be created, renamed, closed or deleted.",
             "Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.",
             "Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; --download-attachment returns its URL so you can retrieve it yourself.",
-            "No search command. Fetch with --get-all-cards and filter the JSON on the client side.",
             "Cards cannot be repositioned inside a list, and --move-card cannot move a card to a different board.",
-            "No member, workspace or organization management; --members only assigns member IDs that already belong to the board.",
-            "Comments can be read and added, but not edited or deleted.",
+            "No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.",
+            "Only comments written by the token’s own account can be edited or deleted.",
             "Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.",
             "Except for --bulk-move-lists there is no batching: one command performs one operation."
         ]),
@@ -420,6 +423,20 @@ public static class CommandCatalog
             Examples: [$"{ToolName} --unarchive-card 5f2c...1f2a"],
             Notes: ["Equivalent to --update-card <card-id> --closed false."]),
 
+        new("--add-card-label", Groups.Card, "Add one label to a card.",
+            Arguments: [new("card-id", "Card to label."), new("label-id", "Label to add.")],
+            Examples: [$"{ToolName} --add-card-label 5f2c...1f2a 5f2c...1f2b"],
+            Notes:
+            [
+                "Adds one label and leaves the rest in place, unlike --labels on --update-card which replaces the whole set.",
+                "Returns the card's resulting label ids."
+            ]),
+
+        new("--remove-card-label", Groups.Card, "Remove one label from a card.",
+            Arguments: [new("card-id", "Card to change."), new("label-id", "Label to remove.")],
+            Examples: [$"{ToolName} --remove-card-label 5f2c...1f2a 5f2c...1f2b"],
+            Notes: ["Removes the label from this card only; the label itself stays on the board."]),
+
         new("--delete-card", Groups.Card, "Delete a card.",
             Arguments: [new("card-id", "Card to delete.")],
             Examples: [$"{ToolName} --delete-card 5f2c...1f2a"],
@@ -435,6 +452,85 @@ public static class CommandCatalog
             Arguments: [new("card-id", "Card to comment on."), new("text", "Comment body.")],
             Examples: [$"{ToolName} --add-comment 5f2c...1f2a \"Deployed to staging\""],
             Notes: ["Comments cannot be edited or deleted through this CLI."]),
+
+        new("--update-comment", Groups.Comment, "Rewrite an existing comment.",
+            Arguments:
+            [
+                new("card-id", "Card carrying the comment."),
+                new("comment-id", "Comment to rewrite; the id from --get-comments."),
+                new("text", "Replacement text.")
+            ],
+            Examples: [$"{ToolName} --update-comment 5f2c...1f2a 5f2c...1f2c \"Corrected note\""],
+            Notes: ["Only comments the token's own account wrote can be edited."]),
+
+        new("--delete-comment", Groups.Comment, "Delete a comment from a card.",
+            Arguments:
+            [
+                new("card-id", "Card carrying the comment."),
+                new("comment-id", "Comment to delete; the id from --get-comments.")
+            ],
+            Examples: [$"{ToolName} --delete-comment 5f2c...1f2a 5f2c...1f2c"],
+            Notes: ["Cannot be undone.", "Only comments the token's own account wrote can be deleted."],
+            Destructive: true),
+
+        // Member
+        new("--whoami", Groups.Member, "Show the account the current token belongs to.",
+            Examples: [$"{ToolName} --whoami"],
+            Notes: ["Everything the CLI does happens as this member, so this is what the token can see and change."]),
+
+        new("--get-member", Groups.Member, "Look up a member by id or username.",
+            Arguments: [new("member", "Member id or username.")],
+            Examples: [$"{ToolName} --get-member alexdoe"]),
+
+        new("--get-members", Groups.Member, "List the members of a board.",
+            Arguments: [new("board-id", "Board to read.")],
+            Examples: [$"{ToolName} --get-members 5f2c...1f2a"],
+            Notes: ["These are the ids --members and --add-card-member accept."]),
+
+        new("--get-card-members", Groups.Member, "List the members assigned to a card.",
+            Arguments: [new("card-id", "Card to read.")],
+            Examples: [$"{ToolName} --get-card-members 5f2c...1f2a"]),
+
+        new("--get-my-cards", Groups.Member, "List the cards assigned to the current member.",
+            Options: [new("--filter", "open|closed|all", "Which cards to return; defaults to open.")],
+            Examples: [$"{ToolName} --get-my-cards", $"{ToolName} --get-my-cards --filter all"],
+            Notes: ["Spans every board the member can see, so it is not limited to one board."]),
+
+        new("--add-card-member", Groups.Member, "Assign a member to a card.",
+            Arguments: [new("card-id", "Card to assign to."), new("member-id", "Member to assign.")],
+            Examples: [$"{ToolName} --add-card-member 5f2c...1f2a 5f2c...1f2d"],
+            Notes: ["Adds one member and leaves the rest in place, unlike --members on --update-card which replaces the whole set."]),
+
+        new("--remove-card-member", Groups.Member, "Unassign a member from a card.",
+            Arguments: [new("card-id", "Card to change."), new("member-id", "Member to remove.")],
+            Examples: [$"{ToolName} --remove-card-member 5f2c...1f2a 5f2c...1f2d"]),
+
+        // Search
+        new("--search", Groups.Search, "Search Trello for cards and boards.",
+            Arguments: [new("query", "What to search for.")],
+            Options:
+            [
+                new("--board", "board-id", "Restrict the search to one board."),
+                new("--limit", "n", "Maximum results per model type."),
+                new("--cards-only", "", "Return cards only, omitting boards and members.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --search \"login page\"",
+                $"{ToolName} --search \"login page\" --board 5f2c...1f2a --limit 10 --cards-only"
+            ],
+            Notes:
+            [
+                "The way to find an id when you only know what the card says; without it you would have to read whole boards with --get-all-cards.",
+                "Matches partial words, and searches everything the token can see unless --board narrows it.",
+                "Trello's own search operators work inside the query, for example \"label:red\" or \"due:week\".",
+                "Returns data.cards, data.boards and data.members; each is empty when nothing matched."
+            ]),
+
+        new("--search-members", Groups.Search, "Search for members by name or username.",
+            Arguments: [new("query", "Name or username fragment.")],
+            Options: [new("--limit", "n", "Maximum results, up to 20.")],
+            Examples: [$"{ToolName} --search-members alex"]),
 
         // Label
         new("--get-labels", Groups.Label, "List the labels defined on a board.",

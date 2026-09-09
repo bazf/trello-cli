@@ -17,6 +17,8 @@ public sealed class CommandDispatcher : ICommandDispatcher
         var attachments = new AttachmentCommands(api, output);
         var checklists = new ChecklistCommands(api, output);
         var labels = new LabelCommands(api, output);
+        var members = new MemberCommands(api, output);
+        var search = new SearchCommands(api, output);
         _output = output;
 
         // Keys must match CommandCatalog.DispatchedCommands; a test asserts both directions.
@@ -85,6 +87,29 @@ public sealed class CommandDispatcher : ICommandDispatcher
                 GetArg(args, 2),
                 GetArg(args, 3)),
             ["--delete-checklist-item"] = args => checklists.DeleteChecklistItemAsync(GetArg(args, 1), GetArg(args, 2)),
+
+            ["--update-comment"] = args => cards.UpdateCommentAsync(GetArg(args, 1), GetArg(args, 2), GetArg(args, 3)),
+            ["--delete-comment"] = args => cards.DeleteCommentAsync(GetArg(args, 1), GetArg(args, 2)),
+
+            ["--add-card-label"] = args => cards.AddCardLabelAsync(GetArg(args, 1), GetArg(args, 2)),
+            ["--remove-card-label"] = args => cards.RemoveCardLabelAsync(GetArg(args, 1), GetArg(args, 2)),
+
+            ["--whoami"] = _ => members.WhoAmIAsync(),
+            ["--get-member"] = args => members.GetMemberAsync(GetArg(args, 1)),
+            ["--get-my-cards"] = args => members.GetMyCardsAsync(GetNamedArg(args, "--filter")),
+            ["--get-members"] = args => members.GetBoardMembersAsync(GetArg(args, 1)),
+            ["--get-card-members"] = args => members.GetCardMembersAsync(GetArg(args, 1)),
+            ["--add-card-member"] = args => members.AddCardMemberAsync(GetArg(args, 1), GetArg(args, 2)),
+            ["--remove-card-member"] = args => members.RemoveCardMemberAsync(GetArg(args, 1), GetArg(args, 2)),
+
+            ["--search"] = args => search.SearchAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--board"),
+                GetNamedArg(args, "--limit"),
+                HasFlag(args, "--cards-only")),
+            ["--search-members"] = args => search.SearchMembersAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--limit")),
 
             ["--get-labels"] = args => labels.GetLabelsAsync(GetArg(args, 1)),
             ["--create-label"] = args => labels.CreateLabelAsync(

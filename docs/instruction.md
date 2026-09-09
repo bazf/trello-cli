@@ -129,6 +129,56 @@ trello-cli --get-comments <card-id>
 
 # Add a comment to a card
 trello-cli --add-comment <card-id> "<comment-text>"
+
+# Rewrite or delete a comment; the comment ID comes from --get-comments,
+# and only comments this account wrote can be changed
+trello-cli --update-comment <card-id> <comment-id> "<new-text>"
+trello-cli --delete-comment <card-id> <comment-id>
+
+# Add or remove a single label, leaving the card's other labels alone
+# (--labels on --update-card replaces the whole set instead)
+trello-cli --add-card-label <card-id> <label-id>
+trello-cli --remove-card-label <card-id> <label-id>
+```
+
+### Search Operations
+
+Search is how you turn words into IDs. Every other command needs an ID you
+already have; this is the one that finds them.
+
+```bash
+# Search everything the token can see
+trello-cli --search "<query>"
+
+# Narrow it: one board, a result cap, cards only
+trello-cli --search "<query>" --board <board-id> --limit 10 --cards-only
+
+# Trello's own operators work inside the query
+trello-cli --search "label:red due:week"
+
+# Find people by name or username
+trello-cli --search-members "<query>" --limit 5
+```
+
+### Member Operations
+
+```bash
+# Which account is this token?
+trello-cli --whoami
+
+# Look someone up by ID or username
+trello-cli --get-member <member-or-username>
+
+# Who is on a board, and who is on a card
+trello-cli --get-members <board-id>
+trello-cli --get-card-members <card-id>
+
+# What is assigned to me, across every board
+trello-cli --get-my-cards --filter open
+
+# Assign or unassign one member without disturbing the others
+trello-cli --add-card-member <card-id> <member-id>
+trello-cli --remove-card-member <card-id> <member-id>
 ```
 
 ### Label Operations
@@ -245,7 +295,7 @@ The same table is returned by `trello-cli --commands` under `data.errorCodes`.
 | `MISSING_PARAM` | A required argument was not provided. |
 | `INVALID_PARAM` | An argument was provided in an unsupported form. |
 | `NO_PARAMS` | An update command was called without any field to change. |
-| `NOT_FOUND` | The board, list, card, label, checklist, item or attachment does not exist or is not visible to the token. |
+| `NOT_FOUND` | The board, list, card, label, checklist, item, attachment, member or comment does not exist or is not visible to the token. |
 | `FILE_NOT_FOUND` | The local file passed to --upload-attachment does not exist. |
 | `CREATE_FAILED` | Trello accepted the request but returned no usable resource. |
 | `UPDATE_FAILED` | Trello accepted the request but returned no usable resource. |
@@ -294,10 +344,9 @@ Printed by `trello-cli --help` and returned by `trello-cli --commands` under
 - Boards are read-only: they cannot be created, renamed, closed or deleted.
 - Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
-- No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
 - Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
-- No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.
-- Comments can be read and added, but not edited or deleted.
+- No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
+- Only comments written by the token's own account can be edited or deleted.
 - Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
 - Except for `--bulk-move-lists` there is no batching: one command performs one operation.
 
@@ -382,9 +431,11 @@ trello-cli --update-card <card-id> --due "2025-01-20" --desc "Updated descriptio
 
 ### Find a card by name
 ```bash
-# Get all cards and filter by name in the response
-trello-cli --get-all-cards <board-id>
-# Then search for the card name in the JSON response
+# Ask Trello, rather than downloading a board and filtering it yourself
+trello-cli --search "<card name>" --cards-only --limit 5
+
+# Restrict to one board when you already know which
+trello-cli --search "<card name>" --board <board-id> --cards-only
 ```
 
 ### Get board overview

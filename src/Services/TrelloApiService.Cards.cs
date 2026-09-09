@@ -66,4 +66,19 @@ public partial class TrelloApiService
 
     public Task<ApiResponse<bool>> DeleteCardAsync(string cardId) =>
         SendForSuccessAsync(HttpMethod.Delete, BuildUrl($"/cards/{cardId}"), "Card not found");
+
+    // Adds one label, in contrast to --labels on --update-card which replaces the whole set.
+    public Task<ApiResponse<List<string>>> AddCardLabelAsync(string cardId, string labelId) =>
+        SendForListAsync<string>(
+            HttpMethod.Post,
+            BuildUrl($"/cards/{cardId}/idLabels"),
+            new FormUrlEncodedContent(new Dictionary<string, string> { ["value"] = labelId }),
+            "Card or label not found");
+
+    public Task<ApiResponse<List<string>>> RemoveCardLabelAsync(string cardId, string labelId) =>
+        SendForListAsync<string>(
+            HttpMethod.Delete,
+            BuildUrl($"/cards/{cardId}/idLabels/{labelId}"),
+            content: null,
+            "Card or label not found");
 }

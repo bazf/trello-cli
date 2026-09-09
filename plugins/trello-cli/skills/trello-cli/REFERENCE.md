@@ -40,7 +40,7 @@ All commands return JSON:
 | `MISSING_PARAM` | A required argument was not provided. |
 | `INVALID_PARAM` | An argument was provided in an unsupported form. |
 | `NO_PARAMS` | An update command was called without any field to change. |
-| `NOT_FOUND` | The board, list, card, label, checklist, item or attachment does not exist or is not visible to the token. |
+| `NOT_FOUND` | The board, list, card, label, checklist, item, attachment, member or comment does not exist or is not visible to the token. |
 | `FILE_NOT_FOUND` | The local file passed to --upload-attachment does not exist. |
 | `CREATE_FAILED` | Trello accepted the request but returned no usable resource. |
 | `UPDATE_FAILED` | Trello accepted the request but returned no usable resource. |
@@ -248,6 +248,85 @@ trello-cli --get-comments <card-id>
 # Add a comment to a card
 trello-cli --add-comment <card-id> "<comment-text>"
 # Returns: {"ok":true,"data":{"id":"...","date":"...","data":{"text":"..."},"memberCreator":{"id":"...","fullName":"...","username":"..."}}}
+```
+
+#### Updating and Deleting Comments
+
+The comment ID is the `id` of the `commentCard` action that `--get-comments` returns.
+Trello only lets an account change its own comments.
+
+```bash
+# Rewrite a comment
+trello-cli --update-comment <card-id> <comment-id> "Corrected note"
+# Returns: {"ok":true,"data":{"id":"...","date":"...","data":{"text":"Corrected note"},"memberCreator":{...}}}
+
+# Delete a comment (permanent)
+trello-cli --delete-comment <card-id> <comment-id>
+# Returns: {"ok":true,"data":true}
+```
+
+### Search Operations
+
+Search is how you turn words into IDs. Every other command needs an ID you already
+have; this is the one that finds them, so reach for it before `--get-all-cards`.
+
+```bash
+# Everything the token can see
+trello-cli --search "login page"
+# Returns: {"ok":true,"data":{"cards":[...],"boards":[...],"members":[...]}}
+
+# Narrow to one board, cap the results, and ask for cards only
+trello-cli --search "login page" --board <board-id> --limit 10 --cards-only
+# Returns: {"ok":true,"data":{"cards":[...],"boards":[],"members":[]}}
+
+# Trello's own search operators work inside the query
+trello-cli --search "label:red due:week"
+
+# Find people by name or username
+trello-cli --search-members "alex" --limit 5
+# Returns: {"ok":true,"data":[{"id":"...","username":"alexdoe","fullName":"Alex Doe"}]}
+```
+
+Matching is partial, so a fragment of a card title is enough. Each collection in the
+response is empty rather than absent when nothing matched.
+
+### Member Operations
+
+```bash
+# Which account does this token act as? Everything the CLI does happens as this member.
+trello-cli --whoami
+# Returns: {"ok":true,"data":{"id":"...","username":"alexdoe","fullName":"Alex Doe","initials":"AD"}}
+
+# Look someone up by ID or username
+trello-cli --get-member alexdoe
+
+# Board members: these are the IDs --members and --add-card-member accept
+trello-cli --get-members <board-id>
+
+# Members assigned to one card
+trello-cli --get-card-members <card-id>
+
+# Everything assigned to me, across every board I can see
+trello-cli --get-my-cards
+trello-cli --get-my-cards --filter all
+```
+
+#### Assigning Members and Labels to Cards
+
+`--labels` and `--members` on `--update-card` replace the entire set. These commands
+change one entry and leave the rest alone, which is usually what you want.
+
+```bash
+# Members
+trello-cli --add-card-member <card-id> <member-id>
+trello-cli --remove-card-member <card-id> <member-id>
+# Both return the card's resulting member list.
+
+# Labels
+trello-cli --add-card-label <card-id> <label-id>
+trello-cli --remove-card-label <card-id> <label-id>
+# Both return the card's resulting label IDs. Removing a label from a card
+# leaves the label itself on the board.
 ```
 
 ### Label Operations
@@ -533,10 +612,9 @@ Also printed by `trello-cli --help` and returned under `data.restrictions` by
 - Boards are read-only: they cannot be created, renamed, closed or deleted.
 - Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
-- No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
 - Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
-- No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.
-- Comments can be read and added, but not edited or deleted.
+- No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
+- Only comments written by the token's own account can be edited or deleted.
 - Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
 - Except for `--bulk-move-lists` there is no batching: one command performs one operation.
 

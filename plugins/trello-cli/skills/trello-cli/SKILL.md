@@ -73,6 +73,33 @@ trello-cli --unarchive-card <card-id>                # Unarchive card
 trello-cli --delete-card <card-id>                   # Delete card (permanent!)
 trello-cli --get-comments <card-id>                  # Get comments
 trello-cli --add-comment <card-id> "<text>"          # Add comment
+trello-cli --update-comment <card-id> <comment-id> "<text>"   # Rewrite own comment
+trello-cli --delete-comment <card-id> <comment-id>            # Delete own comment
+trello-cli --add-card-label <card-id> <label-id>     # Add ONE label, keep the rest
+trello-cli --remove-card-label <card-id> <label-id>  # Remove ONE label
+```
+
+### Search
+
+Start here when you have words but no ID.
+
+```bash
+trello-cli --search "<query>"                        # Cards, boards and members
+trello-cli --search "<query>" --board <board-id> --limit 10 --cards-only
+trello-cli --search "label:red due:week"             # Trello search operators work
+trello-cli --search-members "<query>" --limit 5      # Find people
+```
+
+### Members
+
+```bash
+trello-cli --whoami                                  # Which account is this token?
+trello-cli --get-member <member-or-username>         # Look someone up
+trello-cli --get-members <board-id>                  # Who is on the board
+trello-cli --get-card-members <card-id>              # Who is on the card
+trello-cli --get-my-cards --filter open              # My cards, across all boards
+trello-cli --add-card-member <card-id> <member-id>   # Assign ONE, keep the rest
+trello-cli --remove-card-member <card-id> <member-id>
 ```
 
 ### Labels
@@ -135,12 +162,12 @@ trello-cli --move-card <card-id> <done-list-id>
 What this CLI cannot do, so you do not plan around it:
 
 - Boards are read-only: no create, rename, close or delete. Lists can only be created and repositioned.
-- No search: use `--get-all-cards` and filter the JSON yourself.
 - Cards cannot be reordered inside a list, and `--move-card` cannot cross boards.
 - Only Trello-hosted attachments download; link attachments return their URL instead.
-- Comments can be read and added, never edited or deleted. Members, custom fields, power-ups and webhooks are out of scope.
+- Only comments this account wrote can be edited or deleted.
+- Members can be read and assigned to cards, but not invited, removed from a board, or given a role. Workspaces, custom fields, power-ups and webhooks are out of scope.
 - `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; an archived card is still readable with `--get-card`.
-- `--labels` and `--members` replace the whole set on the card; pass `""` to clear.
+- `--labels` and `--members` replace the whole set on the card; pass `""` to clear. Use `--add-card-label` / `--add-card-member` to change one and leave the rest.
 - `--update-checklist-item` takes a **card** ID; `--add-checklist-item` and `--delete-checklist-item` take a **checklist** ID.
 - Every `--delete-*` is permanent. Prefer `--archive-card`.
 - The exit code is always 0 and unknown options are ignored silently, so always read `ok`.

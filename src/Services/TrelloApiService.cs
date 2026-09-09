@@ -133,6 +133,20 @@ public partial class TrelloApiService : IAuthenticationChecker
                 : ApiResponse<T>.Fail(failureMessage, failureCode);
         }, notFoundMessage);
 
+    /// <summary>Send a request and read the collection Trello returns.</summary>
+    private Task<ApiResponse<List<T>>> SendForListAsync<T>(
+        HttpMethod method,
+        string url,
+        HttpContent? content,
+        string? notFoundMessage) =>
+        ExecuteAsync(async () =>
+        {
+            var response = await SendAsync(method, url, content);
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadAsStringAsync();
+            return ApiResponse<List<T>>.Success(JsonSerializer.Deserialize<List<T>>(body) ?? new());
+        }, notFoundMessage);
+
     /// <summary>Send a request whose response body carries nothing worth reading.</summary>
     private Task<ApiResponse<bool>> SendForSuccessAsync(
         HttpMethod method,

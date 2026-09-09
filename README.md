@@ -236,6 +236,19 @@ run those for the authoritative, always-current version.
 | `--delete-card <card-id>` | Delete a card. **Irreversible.** |
 | `--get-comments <card-id>` | Get the comments on a card. |
 | `--add-comment <card-id> <text>` | Add a comment to a card. |
+| `--update-comment <card-id> <comment-id> <text>` | Rewrite an existing comment. |
+| `--delete-comment <card-id> <comment-id>` | Delete a comment from a card. **Irreversible.** |
+| `--add-card-label <card-id> <label-id>` | Add one label to a card, keeping the others. |
+| `--remove-card-label <card-id> <label-id>` | Remove one label from a card. |
+| `--whoami` | Show the account the current token belongs to. |
+| `--get-member <member>` | Look up a member by id or username. |
+| `--get-members <board-id>` | List the members of a board. |
+| `--get-card-members <card-id>` | List the members assigned to a card. |
+| `--get-my-cards [--filter <open\|closed\|all>]` | List the cards assigned to the current member. |
+| `--add-card-member <card-id> <member-id>` | Assign a member to a card. |
+| `--remove-card-member <card-id> <member-id>` | Unassign a member from a card. |
+| `--search <query> [--board <board-id>] [--limit <n>] [--cards-only]` | Search Trello for cards and boards. |
+| `--search-members <query> [--limit <n>]` | Search for members by name or username. |
 | `--get-labels <board-id>` | List the labels defined on a board. |
 | `--create-label <board-id> <name> [--color <color>]` | Create a label on a board. |
 | `--update-label <label-id> [--name <text>] [--color <color>]` | Rename or recolor a label. |
@@ -261,6 +274,8 @@ Notes worth knowing up front:
 - `--download-attachment` fetches files Trello hosts. A link attachment is not fetched
   for you: it returns `LINK_ATTACHMENT` with the URL so you can retrieve it yourself.
 - `--labels` and `--members` replace the whole set on a card; pass `""` to clear it.
+  Use `--add-card-label` / `--add-card-member` to change one without touching the rest.
+- `--search` is how you turn words into IDs; the other commands all need an ID already.
 
 ## Limits and restrictions
 
@@ -284,10 +299,9 @@ The same list is printed by `trello-cli --help` and returned by
 - Boards are read-only: they cannot be created, renamed, closed or deleted.
 - Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
 - Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
-- No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
 - Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
-- No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.
-- Comments can be read and added, but not edited or deleted.
+- No workspace or organization management. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
+- Only comments written by the token's own account can be edited or deleted.
 - Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
 - Except for `--bulk-move-lists` there is no batching: one command performs one operation.
 

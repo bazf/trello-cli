@@ -156,4 +156,75 @@ public class CardCommands(TrelloApiService api, TextWriter output)
         var result = await Api.AddCommentAsync(cardId, text);
         Write(result);
     }
+
+    public async Task UpdateCommentAsync(string cardId, string commentId, string text)
+    {
+        if (string.IsNullOrEmpty(cardId))
+        {
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            return;
+        }
+
+        if (string.IsNullOrEmpty(commentId))
+        {
+            Write(ApiResponse<object>.Fail("Comment ID required", "MISSING_PARAM"));
+            return;
+        }
+
+        if (string.IsNullOrEmpty(text))
+        {
+            Write(ApiResponse<object>.Fail("Comment text required", "MISSING_PARAM"));
+            return;
+        }
+
+        Write(await Api.UpdateCommentAsync(cardId, commentId, text));
+    }
+
+    public async Task DeleteCommentAsync(string cardId, string commentId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+        {
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            return;
+        }
+
+        if (string.IsNullOrEmpty(commentId))
+        {
+            Write(ApiResponse<object>.Fail("Comment ID required", "MISSING_PARAM"));
+            return;
+        }
+
+        Write(await Api.DeleteCommentAsync(cardId, commentId));
+    }
+
+    public async Task AddCardLabelAsync(string cardId, string labelId)
+    {
+        if (!RequireCardAndLabel(cardId, labelId)) return;
+
+        Write(await Api.AddCardLabelAsync(cardId, labelId));
+    }
+
+    public async Task RemoveCardLabelAsync(string cardId, string labelId)
+    {
+        if (!RequireCardAndLabel(cardId, labelId)) return;
+
+        Write(await Api.RemoveCardLabelAsync(cardId, labelId));
+    }
+
+    private bool RequireCardAndLabel(string cardId, string labelId)
+    {
+        if (string.IsNullOrEmpty(cardId))
+        {
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(labelId))
+        {
+            Write(ApiResponse<object>.Fail("Label ID required", "MISSING_PARAM"));
+            return false;
+        }
+
+        return true;
+    }
 }
