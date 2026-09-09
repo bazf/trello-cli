@@ -11,12 +11,12 @@ public sealed class CommandDispatcher : ICommandDispatcher
 
     public CommandDispatcher(Services.TrelloApiService api, TextWriter output)
     {
-        var board = new BoardCommands(api);
-        var lists = new ListCommands(api);
-        var cards = new CardCommands(api);
-        var attachments = new AttachmentCommands(api);
-        var checklists = new ChecklistCommands(api);
-        var labels = new LabelCommands(api);
+        var board = new BoardCommands(api, output);
+        var lists = new ListCommands(api, output);
+        var cards = new CardCommands(api, output);
+        var attachments = new AttachmentCommands(api, output);
+        var checklists = new ChecklistCommands(api, output);
+        var labels = new LabelCommands(api, output);
         _output = output;
 
         // Keys must match CommandCatalog.DispatchedCommands; a test asserts both directions.

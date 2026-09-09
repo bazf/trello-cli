@@ -4,78 +4,72 @@ using TrelloCli.Utils;
 
 namespace TrelloCli.Commands;
 
-public class AttachmentCommands
+public class AttachmentCommands(TrelloApiService api, TextWriter output)
+    : CommandsBase(api, output)
 {
-    private readonly TrelloApiService _api;
-
-    public AttachmentCommands(TrelloApiService api)
-    {
-        _api = api;
-    }
-
     public async Task GetAttachmentsAsync(string cardId)
     {
         if (string.IsNullOrEmpty(cardId))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
             return;
         }
 
-        var result = await _api.GetAttachmentsAsync(cardId);
-        OutputFormatter.Print(result);
+        var result = await Api.GetAttachmentsAsync(cardId);
+        Write(result);
     }
 
     public async Task UploadAttachmentAsync(string cardId, string filePath, string? name = null)
     {
         if (string.IsNullOrEmpty(cardId))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
             return;
         }
 
         if (string.IsNullOrEmpty(filePath))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("File path required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("File path required", "MISSING_PARAM"));
             return;
         }
 
-        var result = await _api.UploadAttachmentAsync(cardId, filePath, name);
-        OutputFormatter.Print(result);
+        var result = await Api.UploadAttachmentAsync(cardId, filePath, name);
+        Write(result);
     }
 
     public async Task AttachUrlAsync(string cardId, string url, string? name = null)
     {
         if (string.IsNullOrEmpty(cardId))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
             return;
         }
 
         if (string.IsNullOrEmpty(url))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("URL required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("URL required", "MISSING_PARAM"));
             return;
         }
 
-        var result = await _api.AttachUrlAsync(cardId, url, name);
-        OutputFormatter.Print(result);
+        var result = await Api.AttachUrlAsync(cardId, url, name);
+        Write(result);
     }
 
     public async Task DeleteAttachmentAsync(string cardId, string attachmentId)
     {
         if (string.IsNullOrEmpty(cardId))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("Card ID required", "MISSING_PARAM"));
             return;
         }
 
         if (string.IsNullOrEmpty(attachmentId))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("Attachment ID required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("Attachment ID required", "MISSING_PARAM"));
             return;
         }
 
-        var result = await _api.DeleteAttachmentAsync(cardId, attachmentId);
-        OutputFormatter.Print(result);
+        var result = await Api.DeleteAttachmentAsync(cardId, attachmentId);
+        Write(result);
     }
 }

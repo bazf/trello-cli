@@ -4,30 +4,24 @@ using TrelloCli.Utils;
 
 namespace TrelloCli.Commands;
 
-public class BoardCommands
+public class BoardCommands(TrelloApiService api, TextWriter output)
+    : CommandsBase(api, output)
 {
-    private readonly TrelloApiService _api;
-
-    public BoardCommands(TrelloApiService api)
-    {
-        _api = api;
-    }
-
     public async Task GetBoardsAsync()
     {
-        var result = await _api.GetBoardsAsync();
-        OutputFormatter.Print(result);
+        var result = await Api.GetBoardsAsync();
+        Write(result);
     }
 
     public async Task GetBoardAsync(string boardId)
     {
         if (string.IsNullOrEmpty(boardId))
         {
-            OutputFormatter.Print(ApiResponse<object>.Fail("Board ID required", "MISSING_PARAM"));
+            Write(ApiResponse<object>.Fail("Board ID required", "MISSING_PARAM"));
             return;
         }
 
-        var result = await _api.GetBoardAsync(boardId);
-        OutputFormatter.Print(result);
+        var result = await Api.GetBoardAsync(boardId);
+        Write(result);
     }
 }

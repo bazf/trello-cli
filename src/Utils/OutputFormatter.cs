@@ -12,11 +12,6 @@ public static class OutputFormatter
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public static void Print<T>(T obj)
-    {
-        Console.WriteLine(JsonSerializer.Serialize(obj, Options));
-    }
-
     public static string ToJson<T>(T obj)
     {
         return JsonSerializer.Serialize(obj, Options);
