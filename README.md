@@ -13,7 +13,7 @@ A CLI tool that provides Trello integration with Claude Code. With this tool, yo
 
 ## Installation
 
-`trello-cli` 2.0.0 requires the .NET 10 SDK to build. Credential storage is
+`trello-cli` 2.1.0 requires the .NET 10 SDK to build. Credential storage is
 provided by the operating system:
 
 - Windows: Windows Credential Manager.
@@ -221,12 +221,21 @@ run those for the authoritative, always-current version.
 | `--clear-auth` | Remove persisted credentials. |
 | `--get-boards` | List the open boards of the authenticated member. |
 | `--get-board <board-id>` | Get one board. |
-| `--get-lists <board-id>` | Get the open lists of a board. |
+| `--create-board <name> [--desc <text>] [--org <workspace-id>] [--default-lists <true\|false>] [--permission-level <level>]` | Create a board. |
+| `--update-board <board-id> [--name <text>] [--desc <text>] [--permission-level <level>]` | Rename or describe a board. |
+| `--close-board <board-id>` | Close a board. Reversible. |
+| `--reopen-board <board-id>` | Reopen a closed board. |
+| `--get-lists <board-id> [--filter <open\|closed\|all>]` | Get the open lists of a board. |
 | `--create-list <board-id> <name>` | Create a list on a board. |
 | `--move-list <list-id> <pos>` | Reposition a list on its board. |
 | `--bulk-move-lists <list-id:pos>...` | Reposition several lists in one call. |
+| `--update-list <list-id> [--name <text>] [--pos <top\|bottom\|number>]` | Rename or reposition a list. |
+| `--archive-list <list-id>` | Archive a list and its cards. |
+| `--unarchive-list <list-id>` | Restore an archived list. |
+| `--archive-all-cards <list-id>` | Archive every card in a list, keeping the list. |
+| `--move-all-cards <source-list-id> <target-list-id>` | Move every card from one list to another. |
 | `--get-cards <list-id>` | Get the cards of a list. |
-| `--get-all-cards <board-id>` | Get every open card on a board. |
+| `--get-all-cards <board-id> [--filter <open\|closed\|all>]` | Get every open card on a board. |
 | `--get-card <card-id>` | Get one card. |
 | `--create-card <list-id> <name> [--desc <text>] [--due <date>] [--labels <ids>] [--members <ids>]` | Create a card in a list. |
 | `--update-card <card-id> [--name <text>] [--desc <text>] [--due <date>] [--labels <ids>] [--members <ids>] [--closed <true|false>]` | Change fields of a card. |
@@ -234,14 +243,37 @@ run those for the authoritative, always-current version.
 | `--archive-card <card-id>` | Archive a card. |
 | `--unarchive-card <card-id>` | Restore an archived card. |
 | `--delete-card <card-id>` | Delete a card. **Irreversible.** |
+| `--copy-card <card-id> <target-list-id> [--name <text>] [--position <pos>] [--keep <what>]` | Copy a card into a list. |
+| `--set-card-position <card-id> <top\|bottom\|number>` | Move a card within its list. |
+| `--set-due-complete <card-id> <true\|false>` | Tick or untick a card's due date. |
+| `--set-start-date <card-id> <date>` | Set or clear a card's start date. |
+| `--set-card-cover <card-id> [--color <c>] [--attachment <id>] [--size <normal\|full>] [--brightness <light\|dark>]` | Set a card's cover. |
+| `--clear-card-cover <card-id>` | Remove a card's cover. |
+| `--get-card-activity <card-id> [--limit <n>] [--filter <types>]` | Read a card's activity feed. |
 | `--get-comments <card-id>` | Get the comments on a card. |
 | `--add-comment <card-id> <text>` | Add a comment to a card. |
+| `--update-comment <card-id> <comment-id> <text>` | Rewrite an existing comment. |
+| `--delete-comment <card-id> <comment-id>` | Delete a comment from a card. **Irreversible.** |
+| `--add-card-label <card-id> <label-id>` | Add one label to a card, keeping the others. |
+| `--remove-card-label <card-id> <label-id>` | Remove one label from a card. |
+| `--whoami` | Show the account the current token belongs to. |
+| `--get-member <member>` | Look up a member by id or username. |
+| `--get-members <board-id>` | List the members of a board. |
+| `--get-card-members <card-id>` | List the members assigned to a card. |
+| `--get-my-cards [--filter <open\|closed\|all>]` | List the cards assigned to the current member. |
+| `--add-card-member <card-id> <member-id>` | Assign a member to a card. |
+| `--remove-card-member <card-id> <member-id>` | Unassign a member from a card. |
+| `--search <query> [--board <board-id>] [--limit <n>] [--cards-only]` | Search Trello for cards and boards. |
+| `--search-members <query> [--limit <n>]` | Search for members by name or username. |
 | `--get-labels <board-id>` | List the labels defined on a board. |
 | `--create-label <board-id> <name> [--color <color>]` | Create a label on a board. |
 | `--update-label <label-id> [--name <text>] [--color <color>]` | Rename or recolor a label. |
 | `--delete-label <label-id>` | Delete a label. **Irreversible.** |
 | `--list-attachments <card-id>` | List the attachments on a card. |
 | `--upload-attachment <card-id> <file-path> [--name <text>]` | Upload a local file to a card. |
+| `--get-attachment <card-id> <attachment-id>` | Read one attachment's metadata. |
+| `--download-attachment <card-id> <attachment-id> [--output <path>] [--overwrite]` | Download a Trello-hosted attachment to a local file. |
+| `--download-all-attachments <card-id> [--output-dir <path>] [--overwrite]` | Download every Trello-hosted attachment on a card. |
 | `--attach-url <card-id> <url> [--name <text>]` | Attach a URL to a card. |
 | `--delete-attachment <card-id> <attachment-id>` | Delete an attachment from a card. **Irreversible.** |
 | `--get-checklists <card-id>` | Get the checklists of a card, including their items. |
@@ -249,15 +281,28 @@ run those for the authoritative, always-current version.
 | `--delete-checklist <checklist-id>` | Delete a checklist and its items. **Irreversible.** |
 | `--add-checklist-item <checklist-id> <name>` | Add an item to a checklist. |
 | `--update-checklist-item <card-id> <item-id> <state>` | Mark a checklist item complete or incomplete. |
+| `--update-checklist <checklist-id> [--name <text>] [--pos <pos>]` | Rename or reposition a checklist. |
+| `--rename-checklist-item <card-id> <item-id> --name <text>` | Rename an item in a checklist. |
+| `--move-checklist-item <card-id> <item-id> --pos <pos>` | Reorder an item within its checklist. |
 | `--delete-checklist-item <checklist-id> <item-id>` | Delete an item from a checklist. **Irreversible.** |
+| `--get-custom-fields <board-id>` | List the custom fields defined on a board. |
+| `--get-card-custom-fields <card-id>` | Read the custom field values set on a card. |
+| `--set-custom-field <card-id> <field-id> [--value <text>] [--option <option-id>]` | Set a custom field on a card. |
+| `--clear-custom-field <card-id> <field-id>` | Clear a custom field on a card. |
+| `--get-organizations` | List the workspaces the member belongs to. |
+| `--get-organization <workspace-id>` | Get one workspace. |
+| `--get-organization-boards <workspace-id>` | List the boards in a workspace. |
+| `--get-organization-members <workspace-id>` | List the members of a workspace. |
 
 Notes worth knowing up front:
 
 - `--update-checklist-item` takes a **card** ID, while `--add-checklist-item` and
   `--delete-checklist-item` take a **checklist** ID.
-- Downloading attachments is not supported: Trello's download API requires browser
-  authentication. Use `--attach-url` to link an attachment onto another card.
+- `--download-attachment` fetches files Trello hosts. A link attachment is not fetched
+  for you: it returns `LINK_ATTACHMENT` with the URL so you can retrieve it yourself.
 - `--labels` and `--members` replace the whole set on a card; pass `""` to clear it.
+  Use `--add-card-label` / `--add-card-member` to change one without touching the rest.
+- `--search` is how you turn words into IDs; the other commands all need an ID already.
 
 ## Limits and restrictions
 
@@ -278,19 +323,19 @@ The same list is printed by `trello-cli --help` and returned by
 
 **Not supported (no command exists)**
 
-- Boards are read-only: they cannot be created, renamed, closed or deleted.
-- Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
-- Downloading attachment content is not supported, because Trello's download endpoint requires browser authentication. Use `--attach-url` to link an existing attachment onto another card.
-- No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
-- Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
-- No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.
-- Comments can be read and added, but not edited or deleted.
-- Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
-- Except for `--bulk-move-lists` there is no batching: one command performs one operation.
+- Boards cannot be deleted. Closing one with `--close-board` is the reversible equivalent, and deletion is deliberately left out because it destroys every list and card on the board.
+- Lists cannot be deleted. Archiving one with `--archive-list` is the closest equivalent and is reversible.
+- Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
+- `--move-card` cannot move a card to a different board; `--copy-card` can copy one across.
+- Workspaces can be read but not created or changed. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.
+- Only comments written by the token's own account can be edited or deleted.
+- Custom field values can be read and set, but the fields themselves cannot be created or deleted.
+- Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
+- Batching exists only where a command says so: `--bulk-move-lists`, `--archive-all-cards`, `--move-all-cards` and `--download-all-attachments`. Everything else is one operation per command.
 
 **What the read commands return**
 
-- `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; closed boards, archived lists and archived cards are omitted.
+- `--get-boards`, `--get-lists` and `--get-all-cards` return open items unless you pass `--filter closed` or `--filter all`.
 - An archived card is still readable with `--get-card` and can be restored with `--unarchive-card`.
 - `--get-labels` returns at most 1000 labels for a board.
 - Results are returned exactly as Trello sends them, unpaged; large boards produce large JSON documents.

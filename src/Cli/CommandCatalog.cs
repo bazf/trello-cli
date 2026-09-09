@@ -20,6 +20,10 @@ public static class CommandCatalog
         public const string List = "List";
         public const string Card = "Card";
         public const string Comment = "Comment";
+        public const string Member = "Member";
+        public const string Search = "Search";
+        public const string Workspace = "Workspace";
+        public const string CustomField = "Custom field";
         public const string Label = "Label";
         public const string Attachment = "Attachment";
         public const string Checklist = "Checklist";
@@ -34,9 +38,13 @@ public static class CommandCatalog
         Groups.List,
         Groups.Card,
         Groups.Comment,
+        Groups.Member,
+        Groups.Search,
         Groups.Label,
         Groups.Attachment,
-        Groups.Checklist
+        Groups.Checklist,
+        Groups.CustomField,
+        Groups.Workspace
     ];
 
     public static IReadOnlyList<CommandDefinition> Commands { get; } = BuildCommands();
@@ -132,12 +140,22 @@ public static class CommandCatalog
         new("MISSING_PARAM", "A required argument was not provided."),
         new("INVALID_PARAM", "An argument was provided in an unsupported form."),
         new("NO_PARAMS", "An update command was called without any field to change."),
-        new("NOT_FOUND", "The board, list, card, label, checklist, item or attachment does not exist or is not visible to the token."),
+        new("NOT_FOUND", "The board, list, card, label, checklist, item, attachment, member or comment does not exist or is not visible to the token."),
         new("FILE_NOT_FOUND", "The local file passed to --upload-attachment does not exist."),
         new("CREATE_FAILED", "Trello accepted the request but returned no usable resource."),
         new("UPDATE_FAILED", "Trello accepted the request but returned no usable resource."),
         new("UPLOAD_FAILED", "The attachment upload returned no usable resource."),
         new("ATTACH_FAILED", "The URL attachment returned no usable resource."),
+        new("LINK_ATTACHMENT", "The attachment is a link rather than a file Trello hosts; the message carries the URL to fetch."),
+        new("FILE_EXISTS", "The download destination already exists and --overwrite was not passed."),
+        new("DIRECTORY_NOT_FOUND", "The directory for the download destination does not exist and could not be created."),
+        new("PATH_TRAVERSAL", "The attachment file name resolved outside the requested directory and was refused."),
+        new("NAME_COLLISION", "No free file name was available for an attachment in the output directory."),
+        new("DOWNLOAD_INCOMPLETE", "The download ended before the whole file arrived; no partial file was kept."),
+        new("DOWNLOAD_FAILED", "The attachment could not be downloaded."),
+        new("TOO_MANY_REDIRECTS", "The download redirected more times than allowed."),
+        new("REDIRECT_BLOCKED", "The download redirected to an unsupported scheme or downgraded to plain HTTP."),
+        new("REDIRECT_INVALID", "The download returned a redirect with no location to follow."),
         new("HTTP_ERROR", "The Trello request failed; the message carries the HTTP status code when one was received."),
         new("TOKEN_ARGUMENT_REJECTED", "A token was passed on the command line instead of the hidden prompt."),
         new("TOKEN_REQUIRED", "The token prompt received an empty value."),
@@ -166,19 +184,19 @@ public static class CommandCatalog
         ]),
         new("Not supported (no command exists)",
         [
-            "Boards are read-only: they cannot be created, renamed, closed or deleted.",
-            "Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.",
-            "Downloading attachment content is not supported, because Trello's download endpoint requires browser authentication. Use --attach-url to link an existing attachment onto another card.",
-            "No search command. Fetch with --get-all-cards and filter the JSON on the client side.",
-            "Cards cannot be repositioned inside a list, and --move-card cannot move a card to a different board.",
-            "No member, workspace or organization management; --members only assigns member IDs that already belong to the board.",
-            "Comments can be read and added, but not edited or deleted.",
-            "Custom fields, stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.",
-            "Except for --bulk-move-lists there is no batching: one command performs one operation."
+            "Boards cannot be deleted. Closing one with --close-board is the reversible equivalent, and deletion is deliberately left out because it destroys every list and card on the board.",
+            "Lists cannot be deleted. Archiving one with --archive-list is the closest equivalent and is reversible.",
+            "Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; --download-attachment returns its URL so you can retrieve it yourself.",
+            "--move-card cannot move a card to a different board; --copy-card can copy one across.",
+            "Workspaces can be read but not created or changed. Members can be read and assigned to cards, but not invited, removed from a board, or given a different role.",
+            "Only comments written by the token's own account can be edited or deleted.",
+            "Custom field values can be read and set, but the fields themselves cannot be created or deleted.",
+            "Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.",
+            "Batching exists only where a command says so: --bulk-move-lists, --archive-all-cards, --move-all-cards and --download-all-attachments. Everything else is one operation per command."
         ]),
         new("What the read commands return",
         [
-            "--get-boards, --get-lists and --get-all-cards return open items only; closed boards, archived lists and archived cards are omitted.",
+            "--get-boards, --get-lists and --get-all-cards return open items unless you pass --filter closed or --filter all.",
             "An archived card is still readable with --get-card and can be restored with --unarchive-card.",
             "--get-labels returns at most 1000 labels for a board.",
             "Results are returned exactly as Trello sends them, unpaged; large boards produce large JSON documents."
@@ -297,20 +315,70 @@ public static class CommandCatalog
             Dispatched: false),
 
         // Board
-        new("--get-boards", Groups.Board, "List the open boards of the authenticated member.",
-            Examples: [$"{ToolName} --get-boards"],
-            Notes: ["Closed (archived) boards are omitted.", "Usually the first call: other commands need the board ID."]),
+        new("--get-boards", Groups.Board, "List the boards of the authenticated member.",
+            Options: [new("--filter", "open|closed|all", "Which boards to return; defaults to open.")],
+            Examples: [$"{ToolName} --get-boards", $"{ToolName} --get-boards --filter all"],
+            Notes:
+            [
+                "Returns open boards unless --filter says otherwise.",
+                "Usually the first call: other commands need the board ID."
+            ]),
 
         new("--get-board", Groups.Board, "Get one board.",
             Arguments: [new("board-id", "Board ID or the short link from the board URL.")],
             Examples: [$"{ToolName} --get-board 5f2c3d4e5f6a7b8c9d0e1f2a"],
             Notes: ["Boards are read-only in this CLI; there is no create, rename or delete."]),
 
+        new("--create-board", Groups.Board, "Create a board.",
+            Arguments: [new("name", "Board name.")],
+            Options:
+            [
+                new("--desc", "text", "Board description."),
+                new("--org", "workspace-id", "Workspace to create it in; see --get-organizations."),
+                new("--default-lists", "true|false", "Create Trello's To Do / Doing / Done lists; defaults to true."),
+                new("--permission-level", "private|org|public", "Who can see the board.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --create-board \"Q3 planning\"",
+                $"{ToolName} --create-board \"Q3 planning\" --org 5f2c...1f2a --default-lists false"
+            ],
+            Notes: ["Trello creates To Do, Doing and Done unless --default-lists false says otherwise."]),
+
+        new("--update-board", Groups.Board, "Rename or describe a board.",
+            Arguments: [new("board-id", "Board to change.")],
+            Options:
+            [
+                new("--name", "text", "New board name."),
+                new("--desc", "text", "New description; pass \"\" to clear it."),
+                new("--permission-level", "private|org|public", "Who can see the board.")
+            ],
+            Examples: [$"{ToolName} --update-board 5f2c...1f2a --name \"Q4 planning\""],
+            Notes: ["At least one option is required; without one the command returns NO_PARAMS."]),
+
+        new("--close-board", Groups.Board, "Close a board.",
+            Arguments: [new("board-id", "Board to close.")],
+            Examples: [$"{ToolName} --close-board 5f2c...1f2a"],
+            Notes:
+            [
+                "Reversible with --reopen-board, and the recoverable alternative to deleting a board.",
+                "A closed board is hidden from --get-boards unless you pass --filter closed or all."
+            ]),
+
+        new("--reopen-board", Groups.Board, "Reopen a closed board.",
+            Arguments: [new("board-id", "Board to reopen.")],
+            Examples: [$"{ToolName} --reopen-board 5f2c...1f2a"]),
+
         // List
-        new("--get-lists", Groups.List, "Get the open lists of a board.",
+        new("--get-lists", Groups.List, "Get the lists of a board.",
             Arguments: [new("board-id", "Board the lists belong to.")],
-            Examples: [$"{ToolName} --get-lists 5f2c3d4e5f6a7b8c9d0e1f2a"],
-            Notes: ["Archived lists are omitted."]),
+            Options: [new("--filter", "open|closed|all", "Which lists to return; defaults to open.")],
+            Examples:
+            [
+                $"{ToolName} --get-lists 5f2c3d4e5f6a7b8c9d0e1f2a",
+                $"{ToolName} --get-lists 5f2c3d4e5f6a7b8c9d0e1f2a --filter closed"
+            ],
+            Notes: ["Returns open lists unless --filter says otherwise."]),
 
         new("--create-list", Groups.List, "Create a list on a board.",
             Arguments: [new("board-id", "Board to create the list on."), new("name", "List name.")],
@@ -332,15 +400,58 @@ public static class CommandCatalog
                 "A pair that is not <list-id>:<pos> aborts the run with INVALID_PARAM at that point, after the earlier pairs have already moved."
             ]),
 
+        new("--update-list", Groups.List, "Rename or reposition a list.",
+            Arguments: [new("list-id", "List to change.")],
+            Options: [new("--name", "text", "New list name."), new("--pos", "top|bottom|number", "New position.")],
+            Examples: [$"{ToolName} --update-list 5f2c...1f2a --name \"In Review\""],
+            Notes: ["At least one option is required; without one the command returns NO_PARAMS."]),
+
+        new("--archive-list", Groups.List, "Archive a list.",
+            Arguments: [new("list-id", "List to archive.")],
+            Examples: [$"{ToolName} --archive-list 5f2c...1f2a"],
+            Notes:
+            [
+                "Reversible with --unarchive-list. The list's cards are archived with it and come back with it.",
+                "Archived lists are not returned by --get-lists unless you pass --filter closed or all."
+            ]),
+
+        new("--unarchive-list", Groups.List, "Restore an archived list.",
+            Arguments: [new("list-id", "List to restore.")],
+            Examples: [$"{ToolName} --unarchive-list 5f2c...1f2a"]),
+
+        new("--archive-all-cards", Groups.List, "Archive every card in a list.",
+            Arguments: [new("list-id", "List to empty.")],
+            Examples: [$"{ToolName} --archive-all-cards 5f2c...1f2a"],
+            Notes:
+            [
+                "Archives the cards but keeps the list. Each card can be restored with --unarchive-card.",
+                "One request regardless of how many cards the list holds.",
+                "Returns true rather than the archived cards, because Trello sends none back; --move-all-cards does return the cards it moved."
+            ]),
+
+        new("--move-all-cards", Groups.List, "Move every card from one list to another.",
+            Arguments: [new("source-list-id", "List to empty."), new("target-list-id", "List to fill.")],
+            Examples: [$"{ToolName} --move-all-cards 5f2c...1f2a 5f2c...1f2b"],
+            Notes:
+            [
+                "Reads the target list first to find its board, so two requests are made.",
+                "Both lists must be on the same board."
+            ]),
+
         // Card
         new("--get-cards", Groups.Card, "Get the cards of a list.",
             Arguments: [new("list-id", "List to read.")],
             Examples: [$"{ToolName} --get-cards 5f2c3d4e5f6a7b8c9d0e1f2a"],
             Notes: ["Archived cards are omitted."]),
 
-        new("--get-all-cards", Groups.Card, "Get every open card on a board.",
+        new("--get-all-cards", Groups.Card, "Get every card on a board.",
             Arguments: [new("board-id", "Board to read.")],
-            Examples: [$"{ToolName} --get-all-cards 5f2c3d4e5f6a7b8c9d0e1f2a"],
+            Options: [new("--filter", "open|closed|all", "Which cards to return; defaults to open.")],
+            Examples:
+            [
+                $"{ToolName} --get-all-cards 5f2c3d4e5f6a7b8c9d0e1f2a",
+                $"{ToolName} --get-all-cards 5f2c3d4e5f6a7b8c9d0e1f2a --filter closed"
+            ],
             Notes:
             [
                 "Cheaper than one --get-cards per list, and the way to find a card by name: filter the result client-side.",
@@ -410,6 +521,106 @@ public static class CommandCatalog
             Examples: [$"{ToolName} --unarchive-card 5f2c...1f2a"],
             Notes: ["Equivalent to --update-card <card-id> --closed false."]),
 
+        new("--copy-card", Groups.Card, "Copy a card into a list.",
+            Arguments: [new("card-id", "Card to copy."), new("target-list-id", "List to copy it into.")],
+            Options:
+            [
+                new("--name", "text", "Name for the copy; defaults to the original's name."),
+                new("--position", "top|bottom|number", "Where in the list the copy lands."),
+                new("--keep", "all|attachments,checklists,comments,due,labels,members,stickers",
+                    "What to carry over; defaults to all.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --copy-card 5f2c...1f2a 5f2c...1f2b",
+                $"{ToolName} --copy-card 5f2c...1f2a 5f2c...1f2b --name \"Retry\" --keep checklists,labels"
+            ],
+            Notes:
+            [
+                "Copies everything by default. Trello's own default is the name alone, which is rarely what a copy is for.",
+                "The destination list may be on another board, unlike --move-card."
+            ]),
+
+        new("--set-card-position", Groups.Card, "Move a card within its list.",
+            Arguments: [new("card-id", "Card to move."), new("position", "top, bottom, or a number.")],
+            Examples: [$"{ToolName} --set-card-position 5f2c...1f2a top"],
+            Notes: ["Changes the order inside the list; use --move-card to change list."]),
+
+        new("--set-due-complete", Groups.Card, "Mark a card's due date done or not done.",
+            Arguments: [new("card-id", "Card to change."), new("state", "true or false.")],
+            Examples: [$"{ToolName} --set-due-complete 5f2c...1f2a true"],
+            Notes: ["Ticks the due date itself; it neither archives the card nor moves it."]),
+
+        new("--set-start-date", Groups.Card, "Set or clear a card's start date.",
+            Arguments: [new("card-id", "Card to change."), new("date", "ISO-8601 date, or \"\" to clear it.")],
+            Examples:
+            [
+                $"{ToolName} --set-start-date 5f2c...1f2a 2026-03-01",
+                $"{ToolName} --set-start-date 5f2c...1f2a \"\""
+            ],
+            Notes: ["Forwarded to Trello unvalidated, like --due."]),
+
+        new("--set-card-cover", Groups.Card, "Set a card's cover.",
+            Arguments: [new("card-id", "Card to change.")],
+            Options:
+            [
+                new("--color", "color", "Cover color, for example red or blue."),
+                new("--attachment", "attachment-id", "Use an existing image attachment as the cover."),
+                new("--size", "normal|full", "How much of the card the cover takes."),
+                new("--brightness", "light|dark", "Text contrast over the cover.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --set-card-cover 5f2c...1f2a --color blue --size full",
+                $"{ToolName} --set-card-cover 5f2c...1f2a --attachment 5f2c...1f2b"
+            ],
+            Notes:
+            [
+                "At least one option is required; without one the command returns NO_PARAMS.",
+                "An attachment cover must already be on the card and must be an image."
+            ]),
+
+        new("--clear-card-cover", Groups.Card, "Remove a card's cover.",
+            Arguments: [new("card-id", "Card to change.")],
+            Examples: [$"{ToolName} --clear-card-cover 5f2c...1f2a"],
+            Notes: ["Clears the cover only; an attachment used as one stays on the card."]),
+
+        new("--get-card-activity", Groups.Card, "Read a card's activity feed.",
+            Arguments: [new("card-id", "Card to read.")],
+            Options:
+            [
+                new("--limit", "n", "Maximum entries to return."),
+                new("--filter", "action-types", "Comma-separated Trello action types; defaults to all.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --get-card-activity 5f2c...1f2a --limit 20",
+                $"{ToolName} --get-card-activity 5f2c...1f2a --filter updateCard,commentCard"
+            ],
+            Notes:
+            [
+                "Answers who moved or changed a card and when.",
+                "Each entry's data field differs by action type and is passed through as Trello sends it."
+            ]),
+
+        new("--add-card-label", Groups.Card, "Add one label to a card.",
+            Arguments: [new("card-id", "Card to label."), new("label-id", "Label to add.")],
+            Examples: [$"{ToolName} --add-card-label 5f2c...1f2a 5f2c...1f2b"],
+            Notes:
+            [
+                "Adds one label and leaves the rest in place, unlike --labels on --update-card which replaces the whole set.",
+                "Returns the card's resulting label ids."
+            ]),
+
+        new("--remove-card-label", Groups.Card, "Remove one label from a card.",
+            Arguments: [new("card-id", "Card to change."), new("label-id", "Label to remove.")],
+            Examples: [$"{ToolName} --remove-card-label 5f2c...1f2a 5f2c...1f2b"],
+            Notes:
+            [
+                "Removes the label from this card only; the label itself stays on the board.",
+                "Returns true rather than the resulting label ids, because Trello sends none back on removal."
+            ]),
+
         new("--delete-card", Groups.Card, "Delete a card.",
             Arguments: [new("card-id", "Card to delete.")],
             Examples: [$"{ToolName} --delete-card 5f2c...1f2a"],
@@ -425,6 +636,85 @@ public static class CommandCatalog
             Arguments: [new("card-id", "Card to comment on."), new("text", "Comment body.")],
             Examples: [$"{ToolName} --add-comment 5f2c...1f2a \"Deployed to staging\""],
             Notes: ["Comments cannot be edited or deleted through this CLI."]),
+
+        new("--update-comment", Groups.Comment, "Rewrite an existing comment.",
+            Arguments:
+            [
+                new("card-id", "Card carrying the comment."),
+                new("comment-id", "Comment to rewrite; the id from --get-comments."),
+                new("text", "Replacement text.")
+            ],
+            Examples: [$"{ToolName} --update-comment 5f2c...1f2a 5f2c...1f2c \"Corrected note\""],
+            Notes: ["Only comments the token's own account wrote can be edited."]),
+
+        new("--delete-comment", Groups.Comment, "Delete a comment from a card.",
+            Arguments:
+            [
+                new("card-id", "Card carrying the comment."),
+                new("comment-id", "Comment to delete; the id from --get-comments.")
+            ],
+            Examples: [$"{ToolName} --delete-comment 5f2c...1f2a 5f2c...1f2c"],
+            Notes: ["Cannot be undone.", "Only comments the token's own account wrote can be deleted."],
+            Destructive: true),
+
+        // Member
+        new("--whoami", Groups.Member, "Show the account the current token belongs to.",
+            Examples: [$"{ToolName} --whoami"],
+            Notes: ["Everything the CLI does happens as this member, so this is what the token can see and change."]),
+
+        new("--get-member", Groups.Member, "Look up a member by id or username.",
+            Arguments: [new("member", "Member id or username.")],
+            Examples: [$"{ToolName} --get-member alexdoe"]),
+
+        new("--get-members", Groups.Member, "List the members of a board.",
+            Arguments: [new("board-id", "Board to read.")],
+            Examples: [$"{ToolName} --get-members 5f2c...1f2a"],
+            Notes: ["These are the ids --members and --add-card-member accept."]),
+
+        new("--get-card-members", Groups.Member, "List the members assigned to a card.",
+            Arguments: [new("card-id", "Card to read.")],
+            Examples: [$"{ToolName} --get-card-members 5f2c...1f2a"]),
+
+        new("--get-my-cards", Groups.Member, "List the cards assigned to the current member.",
+            Options: [new("--filter", "open|closed|all", "Which cards to return; defaults to open.")],
+            Examples: [$"{ToolName} --get-my-cards", $"{ToolName} --get-my-cards --filter all"],
+            Notes: ["Spans every board the member can see, so it is not limited to one board."]),
+
+        new("--add-card-member", Groups.Member, "Assign a member to a card.",
+            Arguments: [new("card-id", "Card to assign to."), new("member-id", "Member to assign.")],
+            Examples: [$"{ToolName} --add-card-member 5f2c...1f2a 5f2c...1f2d"],
+            Notes: ["Adds one member and leaves the rest in place, unlike --members on --update-card which replaces the whole set."]),
+
+        new("--remove-card-member", Groups.Member, "Unassign a member from a card.",
+            Arguments: [new("card-id", "Card to change."), new("member-id", "Member to remove.")],
+            Examples: [$"{ToolName} --remove-card-member 5f2c...1f2a 5f2c...1f2d"]),
+
+        // Search
+        new("--search", Groups.Search, "Search Trello for cards and boards.",
+            Arguments: [new("query", "What to search for.")],
+            Options:
+            [
+                new("--board", "board-id", "Restrict the search to one board; the short link from a board URL works too."),
+                new("--limit", "n", "Maximum results per model type."),
+                new("--cards-only", "", "Return cards only, omitting boards and members.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --search \"login page\"",
+                $"{ToolName} --search \"login page\" --board 5f2c...1f2a --limit 10 --cards-only"
+            ],
+            Notes:
+            [
+                "The way to find an id when you only know what the card says; without it you would have to read whole boards with --get-all-cards.",
+                "Matches partial words, and searches everything the token can see unless --board narrows it.",
+                "Trello's own search operators work inside the query, for example \"label:red\" or \"due:week\".",
+                "Returns data.cards, data.boards and data.members; each is empty when nothing matched."
+            ]),
+
+        new("--search-members", Groups.Search, "Search for members by name or username.",
+            Arguments: [new("query", "Name or username fragment.")],
+            Options: [new("--limit", "n", "Maximum results, up to 20.")],
+            Examples: [$"{ToolName} --search-members alex"]),
 
         // Label
         new("--get-labels", Groups.Label, "List the labels defined on a board.",
@@ -464,7 +754,7 @@ public static class CommandCatalog
             [
                 "A missing file returns FILE_NOT_FOUND before any request is sent.",
                 "The size limit belongs to Trello and depends on the workspace plan; it is not checked locally.",
-                "Downloading an attachment back is not supported."
+                "Retrieve the file again with --download-attachment."
             ]),
 
         new("--attach-url", Groups.Attachment, "Attach a URL to a card.",
@@ -472,6 +762,47 @@ public static class CommandCatalog
             Options: [new("--name", "text", "Attachment name.")],
             Examples: [$"{ToolName} --attach-url 5f2c...1f2a https://example.com/doc.pdf --name \"Doc\""],
             Notes: ["Also the way to share an existing attachment with another card: take the url from --list-attachments."]),
+
+        new("--get-attachment", Groups.Attachment, "Read one attachment's metadata.",
+            Arguments: [new("card-id", "Card holding the attachment."), new("attachment-id", "Attachment to read.")],
+            Examples: [$"{ToolName} --get-attachment 5f2c...1f2a 5f2c...1f2b"],
+            Notes: ["isUpload tells you whether Trello hosts the file and --download-attachment can fetch it."]),
+
+        new("--download-attachment", Groups.Attachment, "Download a Trello-hosted attachment to a local file.",
+            Arguments: [new("card-id", "Card holding the attachment."), new("attachment-id", "Attachment to download.")],
+            Options:
+            [
+                new("--output", "path", "Destination file, or a directory to place it in. Defaults to the current directory."),
+                new("--overwrite", "", "Replace the destination file if it already exists.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --download-attachment 5f2c...1f2a 5f2c...1f2b",
+                $"{ToolName} --download-attachment 5f2c...1f2a 5f2c...1f2b --output ./spec.pdf --overwrite"
+            ],
+            Notes:
+            [
+                "Only attachments Trello hosts, where isUpload is true. A link attachment returns LINK_ATTACHMENT together with its URL, which you can fetch yourself.",
+                "The file name Trello reports is sanitized before use, so the download always lands inside the directory you named.",
+                "Without --overwrite an existing destination returns FILE_EXISTS; nothing is written.",
+                "The file is written in full or not at all: a truncated transfer returns DOWNLOAD_INCOMPLETE and leaves no partial file."
+            ]),
+
+        new("--download-all-attachments", Groups.Attachment, "Download every Trello-hosted attachment on a card.",
+            Arguments: [new("card-id", "Card to download from.")],
+            Options:
+            [
+                new("--output-dir", "path", "Directory to write into. Required; created when missing."),
+                new("--overwrite", "", "Replace destination files that already exist.")
+            ],
+            Examples: [$"{ToolName} --download-all-attachments 5f2c...1f2a --output-dir ./attachments"],
+            Notes:
+            [
+                "Reports partial success: data.downloaded, data.skipped and data.failed each list the attachments in that state, and one failure does not stop the rest.",
+                "Link attachments appear under skipped with their URL rather than being fetched.",
+                "Attachments sharing a file name are numbered file.pdf, file-2.pdf and so on, so none overwrites another.",
+                "Downloads run one at a time to stay inside Trello's rate limit; a card with many attachments takes a while."
+            ]),
 
         new("--delete-attachment", Groups.Attachment, "Delete an attachment from a card.",
             Arguments: [new("card-id", "Card holding the attachment."), new("attachment-id", "Attachment to delete.")],
@@ -516,17 +847,96 @@ public static class CommandCatalog
                 "Only the state can change; the item text cannot."
             ]),
 
+        new("--update-checklist", Groups.Checklist, "Rename or reposition a checklist.",
+            Arguments: [new("checklist-id", "Checklist to change.")],
+            Options: [new("--name", "text", "New checklist name."), new("--pos", "top|bottom|number", "New position.")],
+            Examples: [$"{ToolName} --update-checklist 5f2c...1f2a --name \"Release steps\""],
+            Notes: ["At least one option is required; without one the command returns NO_PARAMS."]),
+
+        new("--rename-checklist-item", Groups.Checklist, "Rename an item in a checklist.",
+            Arguments: [new("card-id", "Card holding the checklist."), new("item-id", "Item to rename.")],
+            Options: [new("--name", "text", "New item text.")],
+            Examples: [$"{ToolName} --rename-checklist-item 5f2c...1f2a 5f2c...1f2b --name \"Ship it\""],
+            Notes: ["Takes a card ID, like --update-checklist-item and unlike the add and delete item commands."]),
+
+        new("--move-checklist-item", Groups.Checklist, "Reorder an item within its checklist.",
+            Arguments: [new("card-id", "Card holding the checklist."), new("item-id", "Item to move.")],
+            Options: [new("--pos", "top|bottom|number", "New position.")],
+            Examples: [$"{ToolName} --move-checklist-item 5f2c...1f2a 5f2c...1f2b --pos top"],
+            Notes: ["Takes a card ID, like --update-checklist-item."]),
+
         new("--delete-checklist-item", Groups.Checklist, "Delete an item from a checklist.",
             Arguments: [new("checklist-id", "Checklist holding the item."), new("item-id", "Item to delete.")],
             Examples: [$"{ToolName} --delete-checklist-item 5f2c...1f2a 5f2c...1f2b"],
             Notes: ["Cannot be undone."],
-            Destructive: true)
+            Destructive: true),
+
+        // Custom field
+        new("--get-custom-fields", Groups.CustomField, "List the custom fields defined on a board.",
+            Arguments: [new("board-id", "Board to read.")],
+            Examples: [$"{ToolName} --get-custom-fields 5f2c...1f2a"],
+            Notes:
+            [
+                "Each field carries its type: text, number, date, checkbox or list.",
+                "A list field also carries its options; those ids are what --set-custom-field --option takes."
+            ]),
+
+        new("--get-card-custom-fields", Groups.CustomField, "Read the custom field values set on a card.",
+            Arguments: [new("card-id", "Card to read.")],
+            Examples: [$"{ToolName} --get-card-custom-fields 5f2c...1f2a"],
+            Notes: ["Only fields with a value on this card appear; the shape of value depends on the field type."]),
+
+        new("--set-custom-field", Groups.CustomField, "Set a custom field on a card.",
+            Arguments: [new("card-id", "Card to change."), new("field-id", "Custom field to set.")],
+            Options:
+            [
+                new("--value", "text", "Value for a text, number, date or checkbox field."),
+                new("--option", "option-id", "Chosen option for a list field.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --set-custom-field 5f2c...1f2a 5f2c...1f2b --value \"In review\"",
+                $"{ToolName} --set-custom-field 5f2c...1f2a 5f2c...1f2b --option 5f2c...1f2e"
+            ],
+            Notes:
+            [
+                "Reads the field first to learn its type, so one --value works for text, number, date and checkbox fields; that costs an extra request.",
+                "A list field needs --option, not --value; --get-custom-fields lists the option ids.",
+                "Use true or false as the value of a checkbox field, and an ISO-8601 timestamp for a date field."
+            ]),
+
+        new("--clear-custom-field", Groups.CustomField, "Clear a custom field on a card.",
+            Arguments: [new("card-id", "Card to change."), new("field-id", "Custom field to clear.")],
+            Examples: [$"{ToolName} --clear-custom-field 5f2c...1f2a 5f2c...1f2b"],
+            Notes: ["Clears the value on this card; the field stays defined on the board."]),
+
+        // Workspace
+        new("--get-organizations", Groups.Workspace, "List the workspaces the member belongs to.",
+            Examples: [$"{ToolName} --get-organizations"],
+            Notes: ["Trello's API calls workspaces organizations, which is why these commands are named that way."]),
+
+        new("--get-organization", Groups.Workspace, "Get one workspace.",
+            Arguments: [new("workspace-id", "Workspace id or name.")],
+            Examples: [$"{ToolName} --get-organization 5f2c...1f2a"]),
+
+        new("--get-organization-boards", Groups.Workspace, "List the boards in a workspace.",
+            Arguments: [new("workspace-id", "Workspace id or name.")],
+            Examples: [$"{ToolName} --get-organization-boards 5f2c...1f2a"],
+            Notes: ["Narrower than --get-boards, which spans every board the member can see."]),
+
+        new("--get-organization-members", Groups.Workspace, "List the members of a workspace.",
+            Arguments: [new("workspace-id", "Workspace id or name.")],
+            Examples: [$"{ToolName} --get-organization-members 5f2c...1f2a"])
     ];
 }
 
 public sealed record CommandArgument(string Name, string Description, bool Required = true, bool Repeatable = false);
 
-public sealed record CommandOption(string Name, string Value, string Description);
+public sealed record CommandOption(string Name, string Value, string Description)
+{
+    /// <summary>How the option reads in usage output; a switch taking no value shows its name alone.</summary>
+    public string Display => string.IsNullOrEmpty(Value) ? Name : $"{Name} <{Value}>";
+}
 
 public sealed record CommandDefinition(
     string Name,
@@ -560,7 +970,7 @@ public sealed record CommandDefinition(
                 parts.Add(argument.Required ? token : $"[{token}]");
             }
 
-            parts.AddRange(Options.Select(option => $"[{option.Name} <{option.Value}>]"));
+            parts.AddRange(Options.Select(option => $"[{option.Display}]"));
             return string.Join(' ', parts);
         }
     }

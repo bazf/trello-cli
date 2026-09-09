@@ -51,11 +51,23 @@ revoke the Trello token or unset environment variables.
 ```bash
 trello-cli --get-boards                              # List all open boards
 trello-cli --get-board <board-id>                    # Get one board
+trello-cli --create-board "<name>" --org <workspace-id>
+trello-cli --update-board <board-id> --name "<name>"
+trello-cli --close-board <board-id>                  # Reversible; no board deletion
+trello-cli --reopen-board <board-id>
 trello-cli --get-lists <board-id>                    # Get open lists in board
 trello-cli --create-list <board-id> "<name>"         # Create list
 trello-cli --move-list <list-id> <top|bottom|number> # Reposition a list
 trello-cli --bulk-move-lists <id>:top <id>:bottom    # Reposition several lists
+trello-cli --update-list <list-id> --name "<name>"   # Rename or --pos
+trello-cli --archive-list <list-id>                  # Reversible; cards go with it
+trello-cli --unarchive-list <list-id>
+trello-cli --archive-all-cards <list-id>             # Empty the list, keep the list
+trello-cli --move-all-cards <src-list-id> <dst-list-id>
 ```
+
+Add `--filter open|closed|all` to `--get-boards`, `--get-lists` and
+`--get-all-cards` to reach archived items.
 
 ### Cards
 
@@ -70,9 +82,43 @@ trello-cli --update-card <card-id> --name "<name>" --desc "<desc>"
 trello-cli --move-card <card-id> <list-id>           # Move card
 trello-cli --archive-card <card-id>                  # Archive card
 trello-cli --unarchive-card <card-id>                # Unarchive card
+trello-cli --copy-card <card-id> <list-id> --keep all # Copy card (keeps everything)
+trello-cli --set-card-position <card-id> top         # Reorder WITHIN the list
+trello-cli --set-due-complete <card-id> true         # Tick the due date
+trello-cli --set-start-date <card-id> 2026-03-01     # "" clears it
+trello-cli --set-card-cover <card-id> --color blue --size full
+trello-cli --clear-card-cover <card-id>
+trello-cli --get-card-activity <card-id> --limit 20  # Who changed what, when
 trello-cli --delete-card <card-id>                   # Delete card (permanent!)
 trello-cli --get-comments <card-id>                  # Get comments
 trello-cli --add-comment <card-id> "<text>"          # Add comment
+trello-cli --update-comment <card-id> <comment-id> "<text>"   # Rewrite own comment
+trello-cli --delete-comment <card-id> <comment-id>            # Delete own comment
+trello-cli --add-card-label <card-id> <label-id>     # Add ONE label, keep the rest
+trello-cli --remove-card-label <card-id> <label-id>  # Remove ONE label
+```
+
+### Search
+
+Start here when you have words but no ID.
+
+```bash
+trello-cli --search "<query>"                        # Cards, boards and members
+trello-cli --search "<query>" --board <board-id> --limit 10 --cards-only
+trello-cli --search "label:red due:week"             # Trello search operators work
+trello-cli --search-members "<query>" --limit 5      # Find people
+```
+
+### Members
+
+```bash
+trello-cli --whoami                                  # Which account is this token?
+trello-cli --get-member <member-or-username>         # Look someone up
+trello-cli --get-members <board-id>                  # Who is on the board
+trello-cli --get-card-members <card-id>              # Who is on the card
+trello-cli --get-my-cards --filter open              # My cards, across all boards
+trello-cli --add-card-member <card-id> <member-id>   # Assign ONE, keep the rest
+trello-cli --remove-card-member <card-id> <member-id>
 ```
 
 ### Labels
@@ -90,20 +136,40 @@ trello-cli --delete-label <label-id>                            # Delete label
 trello-cli --list-attachments <card-id>              # List attachments
 trello-cli --upload-attachment <card-id> <file-path> [--name "<name>"]
 trello-cli --attach-url <card-id> <url> [--name "<name>"]
+trello-cli --get-attachment <card-id> <attach-id>       # Metadata; isUpload = Trello hosts it
+trello-cli --download-attachment <card-id> <attach-id> [--output "<path>"] [--overwrite]
+trello-cli --download-all-attachments <card-id> --output-dir "<dir>" [--overwrite]
 trello-cli --delete-attachment <card-id> <attach-id>
 ```
 
-**Note:** Downloading attachments is not supported - Trello's download API requires browser authentication. Use `--attach-url` to link attachments between cards.
+**Note:** `--download-attachment` fetches files Trello hosts. A link attachment returns `LINK_ATTACHMENT` with its URL for you to fetch yourself; `--download-all-attachments` reports those under `data.skipped`.
 
 ### Checklists
 
 ```bash
 trello-cli --get-checklists <card-id>                           # Get checklists on card
 trello-cli --create-checklist <card-id> "<name>"                # Create checklist
+trello-cli --update-checklist <checklist-id> --name "<name>" --pos top
+trello-cli --rename-checklist-item <card-id> <item-id> --name "<text>"
+trello-cli --move-checklist-item <card-id> <item-id> --pos top
 trello-cli --delete-checklist <checklist-id>                    # Delete checklist
 trello-cli --add-checklist-item <checklist-id> "<name>"         # Add item
 trello-cli --update-checklist-item <card-id> <item-id> <state>  # complete/incomplete
 trello-cli --delete-checklist-item <checklist-id> <item-id>     # Delete item
+```
+
+### Custom Fields & Workspaces
+
+```bash
+trello-cli --get-custom-fields <board-id>            # Types, and options for list fields
+trello-cli --get-card-custom-fields <card-id>        # What this card has set
+trello-cli --set-custom-field <card-id> <field-id> --value "<value>"
+trello-cli --set-custom-field <card-id> <field-id> --option <option-id>   # list fields
+trello-cli --clear-custom-field <card-id> <field-id>
+trello-cli --get-organizations                       # Workspaces
+trello-cli --get-organization <workspace-id>
+trello-cli --get-organization-boards <workspace-id>
+trello-cli --get-organization-members <workspace-id>
 ```
 
 ## Typical Workflows
@@ -131,13 +197,16 @@ trello-cli --move-card <card-id> <done-list-id>
 
 What this CLI cannot do, so you do not plan around it:
 
-- Boards are read-only: no create, rename, close or delete. Lists can only be created and repositioned.
-- No search: use `--get-all-cards` and filter the JSON yourself.
-- Cards cannot be reordered inside a list, and `--move-card` cannot cross boards.
-- Attachments cannot be downloaded; use `--attach-url` with the `url` from `--list-attachments`.
-- Comments can be read and added, never edited or deleted. Members, custom fields, power-ups and webhooks are out of scope.
-- `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; an archived card is still readable with `--get-card`.
-- `--labels` and `--members` replace the whole set on the card; pass `""` to clear.
+- Boards cannot be deleted; `--close-board` is the reversible equivalent.
+- Lists cannot be deleted; `--archive-list` is the reversible equivalent.
+- `--move-card` cannot cross boards; `--copy-card` can.
+- Only Trello-hosted attachments download; link attachments return their URL instead.
+- Only comments this account wrote can be edited or deleted.
+- Members can be read and assigned to cards, but not invited, removed from a board, or given a role.
+- Workspaces are readable but not editable. Custom field values can be set, but the fields themselves cannot be created or deleted.
+- Stickers, power-ups, webhooks, board backgrounds and notifications are out of scope.
+- `--get-boards`, `--get-lists` and `--get-all-cards` return open items unless you pass `--filter closed` or `--filter all`.
+- `--labels` and `--members` replace the whole set on the card; pass `""` to clear. Use `--add-card-label` / `--add-card-member` to change one and leave the rest.
 - `--update-checklist-item` takes a **card** ID; `--add-checklist-item` and `--delete-checklist-item` take a **checklist** ID.
 - Every `--delete-*` is permanent. Prefer `--archive-card`.
 - The exit code is always 0 and unknown options are ignored silently, so always read `ok`.

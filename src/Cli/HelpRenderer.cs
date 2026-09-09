@@ -62,9 +62,9 @@ public static class HelpRenderer
         {
             builder.AppendLine();
             builder.AppendLine("OPTIONS:");
-            var width = command.Options.Max(option => $"{option.Name} <{option.Value}>".Length);
+            var width = command.Options.Max(option => option.Display.Length);
             foreach (var option in command.Options)
-                AppendWrapped(builder, $"  {$"{option.Name} <{option.Value}>".PadRight(width)}  ", option.Description);
+                AppendWrapped(builder, $"  {option.Display.PadRight(width)}  ", option.Description);
         }
 
         if (command.Notes.Count > 0)
@@ -146,7 +146,7 @@ public static class HelpRenderer
                 }
 
                 foreach (var option in command.Options)
-                    AppendWrapped(builder, $"      {$"[{option.Name} <{option.Value}>]".PadRight(width - 2)}  ", option.Description);
+                    AppendWrapped(builder, $"      {$"[{option.Display}]".PadRight(width - 2)}  ", option.Description);
             }
         }
 

@@ -16,17 +16,17 @@ try
 }
 catch (CredentialStoreException ex) when (ex.Category == CredentialStoreErrorCategory.StoreUnavailable)
 {
-    OutputFormatter.Print(ApiResponse<object>.Fail(
+    Console.Out.WriteLine(OutputFormatter.ToJson(ApiResponse<object>.Fail(
         "The operating system credential store is unavailable.",
-        "CREDENTIAL_STORE_UNAVAILABLE"));
+        "CREDENTIAL_STORE_UNAVAILABLE")));
 }
 catch (CredentialStoreException)
 {
-    OutputFormatter.Print(ApiResponse<object>.Fail(
+    Console.Out.WriteLine(OutputFormatter.ToJson(ApiResponse<object>.Fail(
         "The operating system credential store could not complete the operation.",
-        "CREDENTIAL_STORE_ERROR"));
+        "CREDENTIAL_STORE_ERROR")));
 }
 catch
 {
-    OutputFormatter.Print(ApiResponse<object>.Fail("The command could not be completed.", "ERROR"));
+    Console.Out.WriteLine(OutputFormatter.ToJson(ApiResponse<object>.Fail("The command could not be completed.", "ERROR")));
 }

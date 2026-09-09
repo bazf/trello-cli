@@ -2,7 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace TrelloCli.Models;
 
-public class Board
+/// <summary>A Trello workspace. The API calls them organizations.</summary>
+public class Organization
 {
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
@@ -10,15 +11,15 @@ public class Board
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+
     [JsonPropertyName("desc")]
     public string? Desc { get; set; }
 
     [JsonPropertyName("url")]
     public string? Url { get; set; }
 
-    [JsonPropertyName("closed")]
-    public bool Closed { get; set; }
-
-    [JsonPropertyName("idOrganization")]
-    public string? OrganizationId { get; set; }
+    [JsonPropertyName("website")]
+    public string? Website { get; set; }
 }

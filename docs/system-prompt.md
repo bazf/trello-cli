@@ -24,10 +24,19 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--clear-auth` | Remove persisted credentials. `--clear-auth` |
 | `--get-boards` | List the open boards of the authenticated member. `--get-boards` |
 | `--get-board` | Get one board. `--get-board <board-id>` |
+| `--create-board` | Create a board. `--create-board <name> [--desc <text>] [--org <workspace-id>] [--default-lists <true\|false>] [--permission-level <level>]` |
+| `--update-board` | Rename or describe a board. `--update-board <board-id> [--name <text>] [--desc <text>] [--permission-level <level>]` |
+| `--close-board` | Close a board (reversible). `--close-board <board-id>` |
+| `--reopen-board` | Reopen a closed board. `--reopen-board <board-id>` |
 | `--get-lists` | Get the open lists of a board. `--get-lists <board-id>` |
 | `--create-list` | Create a list on a board. `--create-list <board-id> <name>` |
 | `--move-list` | Reposition a list on its board. `--move-list <list-id> <pos>` |
 | `--bulk-move-lists` | Reposition several lists in one call. `--bulk-move-lists <list-id:pos>...` |
+| `--update-list` | Rename or reposition a list. `--update-list <list-id> [--name <text>] [--pos <pos>]` |
+| `--archive-list` | Archive a list and its cards. `--archive-list <list-id>` |
+| `--unarchive-list` | Restore an archived list. `--unarchive-list <list-id>` |
+| `--archive-all-cards` | Archive every card in a list. `--archive-all-cards <list-id>` |
+| `--move-all-cards` | Move every card between lists. `--move-all-cards <source-list-id> <target-list-id>` |
 | `--get-cards` | Get the cards of a list. `--get-cards <list-id>` |
 | `--get-all-cards` | Get every open card on a board. `--get-all-cards <board-id>` |
 | `--get-card` | Get one card. `--get-card <card-id>` |
@@ -37,15 +46,49 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--archive-card` | Archive a card. `--archive-card <card-id>` |
 | `--unarchive-card` | Restore an archived card. `--unarchive-card <card-id>` |
 | `--delete-card` | Delete a card. `--delete-card <card-id>` |
+| `--copy-card` | Copy a card into a list. `--copy-card <card-id> <target-list-id> [--name <text>] [--position <pos>] [--keep <what>]` |
+| `--set-card-position` | Move a card within its list. `--set-card-position <card-id> <top\|bottom\|number>` |
+| `--set-due-complete` | Tick a card's due date. `--set-due-complete <card-id> <true\|false>` |
+| `--set-start-date` | Set or clear a start date. `--set-start-date <card-id> <date>` |
+| `--set-card-cover` | Set a card's cover. `--set-card-cover <card-id> [--color <c>] [--attachment <id>] [--size <s>] [--brightness <b>]` |
+| `--clear-card-cover` | Remove a card's cover. `--clear-card-cover <card-id>` |
+| `--get-card-activity` | Read a card's activity. `--get-card-activity <card-id> [--limit <n>] [--filter <types>]` |
 | `--get-comments` | Get the comments on a card. `--get-comments <card-id>` |
 | `--add-comment` | Add a comment to a card. `--add-comment <card-id> <text>` |
+| `--update-comment` | Rewrite an existing comment. `--update-comment <card-id> <comment-id> <text>` |
+| `--delete-comment` | Delete a comment. `--delete-comment <card-id> <comment-id>` |
+| `--add-card-label` | Add one label to a card, keeping the others. `--add-card-label <card-id> <label-id>` |
+| `--remove-card-label` | Remove one label from a card. `--remove-card-label <card-id> <label-id>` |
+| `--whoami` | Show the account the current token belongs to. `--whoami` |
+| `--get-member` | Look up a member by id or username. `--get-member <member>` |
+| `--get-members` | List the members of a board. `--get-members <board-id>` |
+| `--get-card-members` | List the members assigned to a card. `--get-card-members <card-id>` |
+| `--get-my-cards` | List cards assigned to you. `--get-my-cards [--filter <open\|closed\|all>]` |
+| `--add-card-member` | Assign a member to a card. `--add-card-member <card-id> <member-id>` |
+| `--remove-card-member` | Unassign a member from a card. `--remove-card-member <card-id> <member-id>` |
+| `--search` | Search for cards and boards. `--search <query> [--board <board-id>] [--limit <n>] [--cards-only]` |
+| `--search-members` | Search for members. `--search-members <query> [--limit <n>]` |
+| `--update-checklist` | Rename or reposition a checklist. `--update-checklist <checklist-id> [--name <text>] [--pos <pos>]` |
+| `--rename-checklist-item` | Rename a checklist item. `--rename-checklist-item <card-id> <item-id> --name <text>` |
+| `--move-checklist-item` | Reorder a checklist item. `--move-checklist-item <card-id> <item-id> --pos <pos>` |
 | `--get-labels` | List the labels defined on a board. `--get-labels <board-id>` |
 | `--create-label` | Create a label on a board. `--create-label <board-id> <name> [--color <color>]` |
 | `--update-label` | Rename or recolor a label. `--update-label <label-id> [--name <text>] [--color <color>]` |
 | `--delete-label` | Delete a label. `--delete-label <label-id>` |
+| `--get-custom-fields` | List a board's custom fields. `--get-custom-fields <board-id>` |
+| `--get-card-custom-fields` | Read a card's custom field values. `--get-card-custom-fields <card-id>` |
+| `--set-custom-field` | Set a custom field on a card. `--set-custom-field <card-id> <field-id> [--value <text>] [--option <option-id>]` |
+| `--clear-custom-field` | Clear a custom field on a card. `--clear-custom-field <card-id> <field-id>` |
+| `--get-organizations` | List your workspaces. `--get-organizations` |
+| `--get-organization` | Get one workspace. `--get-organization <workspace-id>` |
+| `--get-organization-boards` | Boards in a workspace. `--get-organization-boards <workspace-id>` |
+| `--get-organization-members` | Members of a workspace. `--get-organization-members <workspace-id>` |
 | `--list-attachments` | List the attachments on a card. `--list-attachments <card-id>` |
 | `--upload-attachment` | Upload a local file to a card. `--upload-attachment <card-id> <file-path> [--name <text>]` |
 | `--attach-url` | Attach a URL to a card. `--attach-url <card-id> <url> [--name <text>]` |
+| `--get-attachment` | Read one attachment's metadata. `--get-attachment <card-id> <attachment-id>` |
+| `--download-attachment` | Download a Trello-hosted attachment. `--download-attachment <card-id> <attachment-id> [--output <path>] [--overwrite]` |
+| `--download-all-attachments` | Download every Trello-hosted attachment on a card. `--download-all-attachments <card-id> [--output-dir <path>] [--overwrite]` |
 | `--delete-attachment` | Delete an attachment from a card. `--delete-attachment <card-id> <attachment-id>` |
 | `--get-checklists` | Get the checklists of a card, including their items. `--get-checklists <card-id>` |
 | `--create-checklist` | Create a checklist on a card. `--create-checklist <card-id> <name>` |
