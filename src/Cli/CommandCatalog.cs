@@ -694,7 +694,7 @@ public static class CommandCatalog
             Arguments: [new("query", "What to search for.")],
             Options:
             [
-                new("--board", "board-id", "Restrict the search to one board."),
+                new("--board", "board-id", "Restrict the search to one board; the short link from a board URL works too."),
                 new("--limit", "n", "Maximum results per model type."),
                 new("--cards-only", "", "Return cards only, omitting boards and members.")
             ],

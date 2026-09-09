@@ -18,17 +18,67 @@ public class TrelloApiRequestShapeTests
     {
         var (service, handler) = await CreateAsync("{}");
 
-        await service.SearchAsync("login page", boardId: "board-1", limit: 10, cardsOnly: true);
+        // A full 24-character id, so no short-link resolve hop is involved here.
+        await service.SearchAsync("login page", boardId: "6a15c99788f25799472342ad", limit: 10, cardsOnly: true);
 
         var request = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Equal("/1/search", request.Path);
         Assert.Contains("query=login%20page", request.Query);
         Assert.Contains("modelTypes=cards", request.Query);
-        Assert.Contains("idBoards=board-1", request.Query);
+        Assert.Contains("idBoards=6a15c99788f25799472342ad", request.Query);
         Assert.Contains("cards_limit=10", request.Query);
         // Partial matching, so searching for a fragment of a title finds the card.
         Assert.Contains("partial=true", request.Query);
+    }
+
+    [Fact]
+    public async Task SearchResolvesABoardShortLinkBecauseIdBoardsRejectsIt()
+    {
+        // /search takes full ids only and answers a short link with a bare 400, unlike the rest
+        // of the API. The short link is what a board URL actually contains, so it is resolved.
+        var handler = new RoutingHandler(request =>
+            request.RequestUri!.AbsolutePath == "/1/boards/eWk08FHe"
+                ? """{"id":"6a15c99788f25799472342ad"}"""
+                : "{}");
+        var service = await CreateWithHandlerAsync(handler);
+
+        var response = await service.SearchAsync("q", boardId: "eWk08FHe", limit: null, cardsOnly: true);
+
+        Assert.True(response.Ok, response.Error);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("/1/boards/eWk08FHe", handler.Requests[0].Path);
+        Assert.Contains("fields=id", handler.Requests[0].Query);
+        Assert.Contains("idBoards=6a15c99788f25799472342ad", handler.Requests[1].Query);
+    }
+
+    [Fact]
+    public async Task SearchSkipsTheResolveRequestWhenGivenAFullBoardId()
+    {
+        var (service, handler) = await CreateAsync("{}");
+
+        await service.SearchAsync("q", boardId: "6a15c99788f25799472342ad", limit: null, cardsOnly: true);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("/1/search", request.Path);
+        Assert.Contains("idBoards=6a15c99788f25799472342ad", request.Query);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public async Task SearchNamesTheBoardItCouldNotResolveInsteadOfLeakingTheStatusCode(HttpStatusCode status)
+    {
+        var handler = new StatusHandler(status);
+        var service = await CreateWithStatusHandlerAsync(handler);
+
+        var response = await service.SearchAsync("q", boardId: "notaboard", limit: null, cardsOnly: true);
+
+        Assert.False(response.Ok);
+        Assert.Equal("NOT_FOUND", response.Code);
+        Assert.Contains("notaboard", response.Error!, StringComparison.Ordinal);
+        // The search itself is never issued once the board cannot be resolved.
+        Assert.Single(handler.Requests);
     }
 
     [Fact]
@@ -442,6 +492,28 @@ public class TrelloApiRequestShapeTests
             _ => { });
         await config.LoadAsync();
         return new TrelloApiService(config, new HttpClient(handler));
+    }
+
+    private static async Task<TrelloApiService> CreateWithStatusHandlerAsync(StatusHandler handler)
+    {
+        var config = new ConfigService(
+            new FixedTokenCredentialStore("token-canary"),
+            name => name == "TRELLO_API_KEY" ? "api-key-canary" : null,
+            Path.Combine(Path.GetTempPath(), $"trello-shape-{Guid.NewGuid():N}.json"),
+            _ => { });
+        await config.LoadAsync();
+        return new TrelloApiService(config, new HttpClient(handler));
+    }
+
+    private sealed class StatusHandler(HttpStatusCode status) : HttpMessageHandler
+    {
+        public List<string> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request.RequestUri!.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(status));
+        }
     }
 
     private sealed class RoutingHandler(Func<HttpRequestMessage, string> route) : HttpMessageHandler
