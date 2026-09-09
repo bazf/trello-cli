@@ -46,6 +46,9 @@ trello-cli --commands             # the same catalog as JSON (commands, error co
 | `--list-attachments` | List the attachments on a card. `--list-attachments <card-id>` |
 | `--upload-attachment` | Upload a local file to a card. `--upload-attachment <card-id> <file-path> [--name <text>]` |
 | `--attach-url` | Attach a URL to a card. `--attach-url <card-id> <url> [--name <text>]` |
+| `--get-attachment` | Read one attachment's metadata. `--get-attachment <card-id> <attachment-id>` |
+| `--download-attachment` | Download a Trello-hosted attachment. `--download-attachment <card-id> <attachment-id> [--output <path>] [--overwrite]` |
+| `--download-all-attachments` | Download every Trello-hosted attachment on a card. `--download-all-attachments <card-id> [--output-dir <path>] [--overwrite]` |
 | `--delete-attachment` | Delete an attachment from a card. `--delete-attachment <card-id> <attachment-id>` |
 | `--get-checklists` | Get the checklists of a card, including their items. `--get-checklists <card-id>` |
 | `--create-checklist` | Create a checklist on a card. `--create-checklist <card-id> <name>` |

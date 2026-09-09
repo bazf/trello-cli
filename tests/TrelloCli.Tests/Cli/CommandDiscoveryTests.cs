@@ -138,7 +138,7 @@ public class CommandDiscoveryTests
         Assert.Equal("--upload-attachment", data.GetProperty("name").GetString());
         Assert.Contains(
             data.GetProperty("notes").EnumerateArray().Select(note => note.GetString()),
-            note => note!.Contains("Downloading", StringComparison.Ordinal));
+            note => note!.Contains("FILE_NOT_FOUND", StringComparison.Ordinal));
     }
 
     [Fact]

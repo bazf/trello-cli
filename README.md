@@ -242,6 +242,9 @@ run those for the authoritative, always-current version.
 | `--delete-label <label-id>` | Delete a label. **Irreversible.** |
 | `--list-attachments <card-id>` | List the attachments on a card. |
 | `--upload-attachment <card-id> <file-path> [--name <text>]` | Upload a local file to a card. |
+| `--get-attachment <card-id> <attachment-id>` | Read one attachment's metadata. |
+| `--download-attachment <card-id> <attachment-id> [--output <path>] [--overwrite]` | Download a Trello-hosted attachment to a local file. |
+| `--download-all-attachments <card-id> [--output-dir <path>] [--overwrite]` | Download every Trello-hosted attachment on a card. |
 | `--attach-url <card-id> <url> [--name <text>]` | Attach a URL to a card. |
 | `--delete-attachment <card-id> <attachment-id>` | Delete an attachment from a card. **Irreversible.** |
 | `--get-checklists <card-id>` | Get the checklists of a card, including their items. |
@@ -255,8 +258,8 @@ Notes worth knowing up front:
 
 - `--update-checklist-item` takes a **card** ID, while `--add-checklist-item` and
   `--delete-checklist-item` take a **checklist** ID.
-- Downloading attachments is not supported: Trello's download API requires browser
-  authentication. Use `--attach-url` to link an attachment onto another card.
+- `--download-attachment` fetches files Trello hosts. A link attachment is not fetched
+  for you: it returns `LINK_ATTACHMENT` with the URL so you can retrieve it yourself.
 - `--labels` and `--members` replace the whole set on a card; pass `""` to clear it.
 
 ## Limits and restrictions
@@ -280,7 +283,7 @@ The same list is printed by `trello-cli --help` and returned by
 
 - Boards are read-only: they cannot be created, renamed, closed or deleted.
 - Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
-- Downloading attachment content is not supported, because Trello's download endpoint requires browser authentication. Use `--attach-url` to link an existing attachment onto another card.
+- Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
 - No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
 - Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
 - No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.

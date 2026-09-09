@@ -138,6 +138,16 @@ public static class CommandCatalog
         new("UPDATE_FAILED", "Trello accepted the request but returned no usable resource."),
         new("UPLOAD_FAILED", "The attachment upload returned no usable resource."),
         new("ATTACH_FAILED", "The URL attachment returned no usable resource."),
+        new("LINK_ATTACHMENT", "The attachment is a link rather than a file Trello hosts; the message carries the URL to fetch."),
+        new("FILE_EXISTS", "The download destination already exists and --overwrite was not passed."),
+        new("DIRECTORY_NOT_FOUND", "The directory for the download destination does not exist and could not be created."),
+        new("PATH_TRAVERSAL", "The attachment file name resolved outside the requested directory and was refused."),
+        new("NAME_COLLISION", "No free file name was available for an attachment in the output directory."),
+        new("DOWNLOAD_INCOMPLETE", "The download ended before the whole file arrived; no partial file was kept."),
+        new("DOWNLOAD_FAILED", "The attachment could not be downloaded."),
+        new("TOO_MANY_REDIRECTS", "The download redirected more times than allowed."),
+        new("REDIRECT_BLOCKED", "The download redirected to an unsupported scheme or downgraded to plain HTTP."),
+        new("REDIRECT_INVALID", "The download returned a redirect with no location to follow."),
         new("HTTP_ERROR", "The Trello request failed; the message carries the HTTP status code when one was received."),
         new("TOKEN_ARGUMENT_REJECTED", "A token was passed on the command line instead of the hidden prompt."),
         new("TOKEN_REQUIRED", "The token prompt received an empty value."),
@@ -168,7 +178,7 @@ public static class CommandCatalog
         [
             "Boards are read-only: they cannot be created, renamed, closed or deleted.",
             "Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.",
-            "Downloading attachment content is not supported, because Trello's download endpoint requires browser authentication. Use --attach-url to link an existing attachment onto another card.",
+            "Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; --download-attachment returns its URL so you can retrieve it yourself.",
             "No search command. Fetch with --get-all-cards and filter the JSON on the client side.",
             "Cards cannot be repositioned inside a list, and --move-card cannot move a card to a different board.",
             "No member, workspace or organization management; --members only assigns member IDs that already belong to the board.",
@@ -464,7 +474,7 @@ public static class CommandCatalog
             [
                 "A missing file returns FILE_NOT_FOUND before any request is sent.",
                 "The size limit belongs to Trello and depends on the workspace plan; it is not checked locally.",
-                "Downloading an attachment back is not supported."
+                "Retrieve the file again with --download-attachment."
             ]),
 
         new("--attach-url", Groups.Attachment, "Attach a URL to a card.",
@@ -472,6 +482,47 @@ public static class CommandCatalog
             Options: [new("--name", "text", "Attachment name.")],
             Examples: [$"{ToolName} --attach-url 5f2c...1f2a https://example.com/doc.pdf --name \"Doc\""],
             Notes: ["Also the way to share an existing attachment with another card: take the url from --list-attachments."]),
+
+        new("--get-attachment", Groups.Attachment, "Read one attachment's metadata.",
+            Arguments: [new("card-id", "Card holding the attachment."), new("attachment-id", "Attachment to read.")],
+            Examples: [$"{ToolName} --get-attachment 5f2c...1f2a 5f2c...1f2b"],
+            Notes: ["isUpload tells you whether Trello hosts the file and --download-attachment can fetch it."]),
+
+        new("--download-attachment", Groups.Attachment, "Download a Trello-hosted attachment to a local file.",
+            Arguments: [new("card-id", "Card holding the attachment."), new("attachment-id", "Attachment to download.")],
+            Options:
+            [
+                new("--output", "path", "Destination file, or a directory to place it in. Defaults to the current directory."),
+                new("--overwrite", "", "Replace the destination file if it already exists.")
+            ],
+            Examples:
+            [
+                $"{ToolName} --download-attachment 5f2c...1f2a 5f2c...1f2b",
+                $"{ToolName} --download-attachment 5f2c...1f2a 5f2c...1f2b --output ./spec.pdf --overwrite"
+            ],
+            Notes:
+            [
+                "Only attachments Trello hosts, where isUpload is true. A link attachment returns LINK_ATTACHMENT together with its URL, which you can fetch yourself.",
+                "The file name Trello reports is sanitized before use, so the download always lands inside the directory you named.",
+                "Without --overwrite an existing destination returns FILE_EXISTS; nothing is written.",
+                "The file is written in full or not at all: a truncated transfer returns DOWNLOAD_INCOMPLETE and leaves no partial file."
+            ]),
+
+        new("--download-all-attachments", Groups.Attachment, "Download every Trello-hosted attachment on a card.",
+            Arguments: [new("card-id", "Card to download from.")],
+            Options:
+            [
+                new("--output-dir", "path", "Directory to write into. Required; created when missing."),
+                new("--overwrite", "", "Replace destination files that already exist.")
+            ],
+            Examples: [$"{ToolName} --download-all-attachments 5f2c...1f2a --output-dir ./attachments"],
+            Notes:
+            [
+                "Reports partial success: data.downloaded, data.skipped and data.failed each list the attachments in that state, and one failure does not stop the rest.",
+                "Link attachments appear under skipped with their URL rather than being fetched.",
+                "Attachments sharing a file name are numbered file.pdf, file-2.pdf and so on, so none overwrites another.",
+                "Downloads run one at a time to stay inside Trello's rate limit; a card with many attachments takes a while."
+            ]),
 
         new("--delete-attachment", Groups.Attachment, "Delete an attachment from a card.",
             Arguments: [new("card-id", "Card holding the attachment."), new("attachment-id", "Attachment to delete.")],
@@ -526,7 +577,11 @@ public static class CommandCatalog
 
 public sealed record CommandArgument(string Name, string Description, bool Required = true, bool Repeatable = false);
 
-public sealed record CommandOption(string Name, string Value, string Description);
+public sealed record CommandOption(string Name, string Value, string Description)
+{
+    /// <summary>How the option reads in usage output; a switch taking no value shows its name alone.</summary>
+    public string Display => string.IsNullOrEmpty(Value) ? Name : $"{Name} <{Value}>";
+}
 
 public sealed record CommandDefinition(
     string Name,
@@ -560,7 +615,7 @@ public sealed record CommandDefinition(
                 parts.Add(argument.Required ? token : $"[{token}]");
             }
 
-            parts.AddRange(Options.Select(option => $"[{option.Name} <{option.Value}>]"));
+            parts.AddRange(Options.Select(option => $"[{option.Display}]"));
             return string.Join(' ', parts);
         }
     }

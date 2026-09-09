@@ -90,10 +90,13 @@ trello-cli --delete-label <label-id>                            # Delete label
 trello-cli --list-attachments <card-id>              # List attachments
 trello-cli --upload-attachment <card-id> <file-path> [--name "<name>"]
 trello-cli --attach-url <card-id> <url> [--name "<name>"]
+trello-cli --get-attachment <card-id> <attach-id>       # Metadata; isUpload = Trello hosts it
+trello-cli --download-attachment <card-id> <attach-id> [--output "<path>"] [--overwrite]
+trello-cli --download-all-attachments <card-id> --output-dir "<dir>" [--overwrite]
 trello-cli --delete-attachment <card-id> <attach-id>
 ```
 
-**Note:** Downloading attachments is not supported - Trello's download API requires browser authentication. Use `--attach-url` to link attachments between cards.
+**Note:** `--download-attachment` fetches files Trello hosts. A link attachment returns `LINK_ATTACHMENT` with its URL for you to fetch yourself; `--download-all-attachments` reports those under `data.skipped`.
 
 ### Checklists
 
@@ -134,7 +137,7 @@ What this CLI cannot do, so you do not plan around it:
 - Boards are read-only: no create, rename, close or delete. Lists can only be created and repositioned.
 - No search: use `--get-all-cards` and filter the JSON yourself.
 - Cards cannot be reordered inside a list, and `--move-card` cannot cross boards.
-- Attachments cannot be downloaded; use `--attach-url` with the `url` from `--list-attachments`.
+- Only Trello-hosted attachments download; link attachments return their URL instead.
 - Comments can be read and added, never edited or deleted. Members, custom fields, power-ups and webhooks are out of scope.
 - `--get-boards`, `--get-lists` and `--get-all-cards` return open items only; an archived card is still readable with `--get-card`.
 - `--labels` and `--members` replace the whole set on the card; pass `""` to clear.

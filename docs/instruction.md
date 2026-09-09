@@ -161,13 +161,23 @@ trello-cli --upload-attachment <card-id> <file-path> --name "<attachment-name>"
 # Attach a URL (also how an attachment is linked onto another card)
 trello-cli --attach-url <card-id> <url> --name "<attachment-name>"
 
+# Read one attachment's metadata (isUpload says whether Trello hosts the file)
+trello-cli --get-attachment <card-id> <attachment-id>
+
+# Download a Trello-hosted attachment
+trello-cli --download-attachment <card-id> <attachment-id> --output <path> --overwrite
+
+# Download every Trello-hosted attachment on a card
+trello-cli --download-all-attachments <card-id> --output-dir <path> --overwrite
+
 # Delete an attachment (permanent)
 trello-cli --delete-attachment <card-id> <attachment-id>
 ```
 
-Downloading attachment content is not supported: Trello's download API requires
-browser authentication. Take the `url` from `--list-attachments` and pass it to
-`--attach-url` when a file has to reach another card.
+`--download-attachment` fetches files Trello hosts, following Trello's redirect to its
+storage without ever sending your credentials there. Attachments Trello does not host are
+links: they return `LINK_ATTACHMENT` with the URL, and `--download-all-attachments` lists
+them under `data.skipped` rather than fetching them for you.
 
 ### Checklist Operations
 
@@ -241,6 +251,16 @@ The same table is returned by `trello-cli --commands` under `data.errorCodes`.
 | `UPDATE_FAILED` | Trello accepted the request but returned no usable resource. |
 | `UPLOAD_FAILED` | The attachment upload returned no usable resource. |
 | `ATTACH_FAILED` | The URL attachment returned no usable resource. |
+| `LINK_ATTACHMENT` | The attachment is a link rather than a file Trello hosts; the message carries the URL to fetch. |
+| `FILE_EXISTS` | The download destination already exists and `--overwrite` was not passed. |
+| `DIRECTORY_NOT_FOUND` | The directory for the download destination does not exist and could not be created. |
+| `PATH_TRAVERSAL` | The attachment file name resolved outside the requested directory and was refused. |
+| `NAME_COLLISION` | No free file name was available for an attachment in the output directory. |
+| `DOWNLOAD_INCOMPLETE` | The download ended before the whole file arrived; no partial file was kept. |
+| `DOWNLOAD_FAILED` | The attachment could not be downloaded. |
+| `TOO_MANY_REDIRECTS` | The download redirected more times than allowed. |
+| `REDIRECT_BLOCKED` | The download redirected to an unsupported scheme or downgraded to plain HTTP. |
+| `REDIRECT_INVALID` | The download returned a redirect with no location to follow. |
 | `HTTP_ERROR` | The Trello request failed; the message carries the HTTP status code when one was received. |
 | `TOKEN_ARGUMENT_REJECTED` | A token was passed on the command line instead of the hidden prompt. |
 | `TOKEN_REQUIRED` | The token prompt received an empty value. |
@@ -273,7 +293,7 @@ Printed by `trello-cli --help` and returned by `trello-cli --commands` under
 
 - Boards are read-only: they cannot be created, renamed, closed or deleted.
 - Lists can be created and repositioned only; renaming, archiving and deleting a list are not available.
-- Downloading attachment content is not supported, because Trello's download endpoint requires browser authentication. Use `--attach-url` to link an existing attachment onto another card.
+- Only Trello-hosted attachments can be downloaded. A link attachment is not fetched for you; `--download-attachment` returns its URL so you can retrieve it yourself.
 - No search command. Fetch with `--get-all-cards` and filter the JSON on the client side.
 - Cards cannot be repositioned inside a list, and `--move-card` cannot move a card to a different board.
 - No member, workspace or organization management; `--members` only assigns member IDs that already belong to the board.

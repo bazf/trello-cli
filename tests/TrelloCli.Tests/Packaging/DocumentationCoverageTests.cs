@@ -10,7 +10,7 @@ namespace TrelloCli.Tests.Packaging;
 /// </summary>
 public class DocumentationCoverageTests
 {
-    public static TheoryData<string> DocumentedSurfaces =>
+    private static readonly string[] Surfaces =
     [
         "README.md",
         "docs/instruction.md",
@@ -18,6 +18,8 @@ public class DocumentationCoverageTests
         "plugins/trello-cli/skills/trello-cli/SKILL.md",
         "plugins/trello-cli/skills/trello-cli/REFERENCE.md"
     ];
+
+    public static TheoryData<string> DocumentedSurfaces => [.. Surfaces];
 
     [Theory]
     [MemberData(nameof(DocumentedSurfaces))]
@@ -44,6 +46,33 @@ public class DocumentationCoverageTests
 
         Assert.Contains("--help", text, StringComparison.Ordinal);
         Assert.Contains("--commands", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Attachment download was documented as impossible for years on the grounds that Trello's
+    /// download endpoint "requires browser authentication". It does not: it requires the same
+    /// Authorization header every other call here already sends. The claim was repeated across
+    /// the catalog and all five documents, so guard against it coming back.
+    /// </summary>
+    [Fact]
+    public void NoDocumentClaimsAttachmentDownloadIsUnsupported()
+    {
+        string[] falseClaims =
+        [
+            "requires browser authentication",
+            "requires browser session authentication",
+            "Downloading attachments is not supported",
+            "Downloading attachment content is not supported"
+        ];
+
+        var sources = Surfaces.Append("src/Cli/CommandCatalog.cs");
+
+        foreach (var source in sources)
+        {
+            var text = ReadRepositoryFile(source);
+            foreach (var claim in falseClaims)
+                Assert.DoesNotContain(claim, text, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private static string ReadRepositoryFile(string relativePath) =>

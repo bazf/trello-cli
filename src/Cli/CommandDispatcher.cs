@@ -64,6 +64,16 @@ public sealed class CommandDispatcher : ICommandDispatcher
                 GetArg(args, 1),
                 GetArg(args, 2),
                 GetNamedArg(args, "--name")),
+            ["--get-attachment"] = args => attachments.GetAttachmentAsync(GetArg(args, 1), GetArg(args, 2)),
+            ["--download-attachment"] = args => attachments.DownloadAttachmentAsync(
+                GetArg(args, 1),
+                GetArg(args, 2),
+                GetNamedArg(args, "--output"),
+                HasFlag(args, "--overwrite")),
+            ["--download-all-attachments"] = args => attachments.DownloadAllAttachmentsAsync(
+                GetArg(args, 1),
+                GetNamedArg(args, "--output-dir"),
+                HasFlag(args, "--overwrite")),
             ["--delete-attachment"] = args => attachments.DeleteAttachmentAsync(GetArg(args, 1), GetArg(args, 2)),
 
             ["--get-checklists"] = args => checklists.GetChecklistsAsync(GetArg(args, 1)),
@@ -112,6 +122,10 @@ public sealed class CommandDispatcher : ICommandDispatcher
         "false" => false,
         _ => null
     };
+
+    /// <summary>True when a valueless switch such as --overwrite is present.</summary>
+    private static bool HasFlag(string[] args, string name) =>
+        Array.IndexOf(args, name) >= 0;
 
     private static string GetArg(string[] args, int index) =>
         args.Length > index ? args[index] : string.Empty;

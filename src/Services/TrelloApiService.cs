@@ -3,12 +3,13 @@ using TrelloCli.Models;
 
 namespace TrelloCli.Services;
 
-public class TrelloApiService : IAuthenticationChecker
+public partial class TrelloApiService : IAuthenticationChecker
 {
     private readonly HttpClient _http;
     private readonly ConfigService _config;
     private const string ProductionBaseUrl = "https://api.trello.com/1";
     private readonly string _baseUrl;
+    private readonly Uri _baseUri;
     private const string HttpRequestFailedMessage = "HTTP request failed.";
     private const string UnexpectedErrorMessage = "Unexpected error occurred.";
 
@@ -27,6 +28,7 @@ public class TrelloApiService : IAuthenticationChecker
         _config = config;
         _http = http;
         _baseUrl = baseUrl.TrimEnd('/');
+        _baseUri = new Uri(_baseUrl, UriKind.Absolute);
     }
 
     private string BuildUrl(string endpoint, string? extraParams = null)
@@ -53,12 +55,13 @@ public class TrelloApiService : IAuthenticationChecker
             ? $"HTTP request failed with status {(int)statusCode}."
             : HttpRequestFailedMessage;
 
+    private string AuthorizationHeaderValue() =>
+        $"OAuth oauth_consumer_key=\"{_config.ApiKey}\", oauth_token=\"{_config.Token}\"";
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, HttpContent? content = null)
     {
         using var request = new HttpRequestMessage(method, url) { Content = content };
-        request.Headers.TryAddWithoutValidation(
-            "Authorization",
-            $"OAuth oauth_consumer_key=\"{_config.ApiKey}\", oauth_token=\"{_config.Token}\"");
+        request.Headers.TryAddWithoutValidation("Authorization", AuthorizationHeaderValue());
         return await _http.SendAsync(request);
     }
 
