@@ -52,14 +52,14 @@ else
 fi
 
 # Remove Claude Code skills
-CLAUDE_SKILLS_DIR="$HOME/.claude/skills/trello-cli"
-if [ -d "$CLAUDE_SKILLS_DIR" ]; then
-    echo_info "Removing Claude Code skills..."
-    rm -rf "$CLAUDE_SKILLS_DIR"
-    echo_info "Skills removed from $CLAUDE_SKILLS_DIR"
-else
-    echo_warn "Claude Code skills not found at $CLAUDE_SKILLS_DIR"
-fi
+for skill_name in trello-cli trello-card-artifact; do
+    CLAUDE_SKILLS_DIR="$HOME/.claude/skills/$skill_name"
+    if [ -d "$CLAUDE_SKILLS_DIR" ]; then
+        echo_info "Removing Claude Code skill ($skill_name)..."
+        rm -rf "$CLAUDE_SKILLS_DIR"
+        echo_info "Skill removed from $CLAUDE_SKILLS_DIR"
+    fi
+done
 
 # Remove config (optional - ask user)
 CONFIG_DIR="$HOME/.trello-cli"

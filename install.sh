@@ -76,11 +76,14 @@ fi
 
 # Install Claude Code skills
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
-if [ -d "$SCRIPT_DIR/plugins/trello-cli/skills/trello-cli" ]; then
+if [ -d "$SCRIPT_DIR/plugins/trello-cli/skills" ]; then
     echo_info "Installing Claude Code skills..."
     mkdir -p "$CLAUDE_SKILLS_DIR"
-    cp -r "$SCRIPT_DIR/plugins/trello-cli/skills/trello-cli" "$CLAUDE_SKILLS_DIR/"
-    echo_info "Skills installed to $CLAUDE_SKILLS_DIR/trello-cli"
+    for skill_dir in "$SCRIPT_DIR/plugins/trello-cli/skills"/*/; do
+        skill_name="$(basename "$skill_dir")"
+        cp -r "$skill_dir" "$CLAUDE_SKILLS_DIR/"
+        echo_info "Skill installed to $CLAUDE_SKILLS_DIR/$skill_name"
+    done
 fi
 
 echo ""
