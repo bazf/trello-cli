@@ -33,10 +33,8 @@ Use `trello-cli` (see the `trello-cli` skill for auth and command details) to fe
 
 ### 2. Create the Side Artifact
 
-Write a Markdown file in the conversation's artifact directory (e.g., `trello_card_edit.md`) using `write_to_file` with:
-- `ArtifactMetadata.UserFacing: true`
-- `ArtifactMetadata.RequestFeedback: true`
-- `Overwrite: true`
+- **In Antigravity** (when `write_to_file` with `ArtifactMetadata` is available): write a Markdown file in the conversation's artifact directory (e.g., `trello_card_edit.md`) with `ArtifactMetadata.UserFacing: true`, `ArtifactMetadata.RequestFeedback: true`, and `Overwrite: true`.
+- **In other runtimes (e.g., Claude Code)** where `write_to_file` / `ArtifactMetadata` is unavailable: write the same Markdown template to a temporary/local file using the runtime's native file-write tool (such as `Write`) or output it in chat, and invite the user to reply with the edits they want applied.
 
 Follow this layout (localized to the user's language for all UI chrome):
 
