@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (defaults to v<Version> from src/TrelloCli.csproj)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve and validate version tag
+        id: version
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          csproj_version=$(sed -nE 's/.*<Version>([^<]+)<\/Version>.*/\1/p' src/TrelloCli.csproj | head -n1)
+          if [[ -z "$csproj_version" ]]; then
+            echo "::error::Could not extract <Version> from src/TrelloCli.csproj"
+            exit 1
+          fi
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="${INPUT_TAG:-v${csproj_version}}"
+          else
+            tag="$REF_NAME"
+          fi
+
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag '$tag'. Expected vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
+
+          expected_tag="v${csproj_version}"
+          if [[ "$tag" != "$expected_tag" ]]; then
+            echo "::error::Tag '$tag' does not match src/TrelloCli.csproj version '$csproj_version'."
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${csproj_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore and test
+        run: |
+          dotnet restore tests/TrelloCli.Tests/TrelloCli.Tests.csproj --locked-mode --nologo
+          dotnet test tests/TrelloCli.Tests/TrelloCli.Tests.csproj --configuration Release --no-restore --nologo --verbosity minimal
+
+      - name: Build release assets
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+
+          dotnet publish src/TrelloCli.csproj \
+            --configuration Release \
+            --runtime linux-x64 \
+            --no-self-contained \
+            -p:PublishSingleFile=true \
+            -p:DebugType=none \
+            -p:DebugSymbols=false \
+            --output release-assets/linux-x64 \
+            --nologo
+
+          cp release-assets/linux-x64/TrelloCli release-assets/trello-cli-linux-x64
+          chmod 0755 release-assets/trello-cli-linux-x64
+          ./release-assets/trello-cli-linux-x64 --version
+
+          (
+            cd release-assets
+            sha256sum trello-cli-linux-x64 > trello-cli-linux-x64.sha256
+            sha256sum -c trello-cli-linux-x64.sha256
+          )
+
+          dotnet pack src/TrelloCli.csproj \
+            --configuration Release \
+            --output release-assets \
+            --nologo
+
+          ls -lh release-assets/trello-cli-linux-x64 release-assets/trello-cli-linux-x64.sha256 "release-assets/TrelloCli.${VERSION}.nupkg"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          assets=(
+            "release-assets/trello-cli-linux-x64"
+            "release-assets/trello-cli-linux-x64.sha256"
+            "release-assets/TrelloCli.${VERSION}.nupkg"
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$TAG" "${assets[@]}" \
+              --target "$TARGET_SHA" \
+              --title "$TAG" \
+              --generate-notes
+          fi
